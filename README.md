@@ -78,9 +78,9 @@ The `CLAUDE.md` is the actual artefact worth talking about. It is where the inva
 
 ## What I would do differently
 
-**Evaluation on real sessions, from day one.** I ended up assessing the attendant against recorded real conversations, because synthetic cases passed and real conversations broke. Real users are ungrammatical, change their minds mid-sentence, and ask for things that are not on the menu. I got there eventually; I should have started there.
+**Testing like a real customer, from day one.** I ended up assessing the attendant with manual tests on a real phone, and real bugs turned into end-to-end regression tests, because synthetic cases passed and conversations on a real phone broke. Real users are ungrammatical, change their minds mid-sentence, and ask for things that are not on the menu. I got there eventually; I should have started there.
 
-**I do not have formal agent evaluation at scale.** Curated datasets, scorers, judges, regression suites across versions. What I have is evaluation on real sessions in a small system, and the knowledge that the synthetic version lied to me. That is a gap and I would rather say so than imply otherwise.
+**I do not have formal agent evaluation at scale.** Curated datasets, scorers, judges, regression suites across versions. What I have is manual tests on a real phone and end-to-end regression tests built from real bugs, in a small system, and the knowledge that the synthetic version lied to me. That is a gap and I would rather say so than imply otherwise.
 
 ---
 
