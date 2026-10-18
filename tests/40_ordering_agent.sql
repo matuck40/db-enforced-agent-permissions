@@ -72,6 +72,8 @@ select test.refused(format($$insert into app.order_items (order_id, description,
 select test.refused(format($$delete from app.orders where id = %L$$, :'chat_order'),
   '42501', '(b) cannot delete an order');
 select test.refused('set role manager', '42501', '(b) cannot switch to a more powerful role');
+select test.refused('set role app_owner', '42501',
+  '(b) cannot become the schema owner, which bypasses row-level security');
 select test.refused('create table app.backdoor (x int)', '42501', '(b) cannot create objects');
 
 rollback;

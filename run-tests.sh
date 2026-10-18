@@ -29,11 +29,24 @@ else
   docker compose up -d --wait --quiet-pull >/dev/null 2>&1
 fi
 
+failed=0
+
 # Setup is the only step that runs as the bootstrap superuser.
 psql_as postgres < schema.sql
+
+# The schema as deployed, before tests/setup.sql enables the owner's login for
+# tests/60: nothing can connect as app_owner, the BYPASSRLS schema owner.
+echo "== deployed schema: app_owner cannot log in"
+if output=$(psql_as app_owner <<<'select 1' 2>&1); then status=0; else status=$?; fi
+if [ "$status" -ne 0 ] && grep -q 'not permitted to log in' <<<"$output"; then
+  echo "refused  app_owner login  [$(grep -o 'role "app_owner" is not permitted to log in' <<<"$output")]"
+else
+  echo "FAILED: a connection as app_owner was not refused"; echo "$output"; failed=1
+fi
+echo
+
 psql_as postgres < tests/setup.sql
 
-failed=0
 for file in tests/[0-9]*_*.sql; do
   role=$(sed -n 's/^-- role: *//p' "$file" | head -n 1)
   if [ -z "$role" ] || [ "$role" = postgres ]; then
