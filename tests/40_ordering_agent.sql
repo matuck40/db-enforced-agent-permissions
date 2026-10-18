@@ -14,6 +14,8 @@
 \set counter_order '00000000-0000-0000-0000-000000000c02'
 \set item_a        '00000000-0000-0000-0000-00000000000a'
 \set item_b        '00000000-0000-0000-0000-00000000000b'
+\set payment       '00000000-0000-0000-0000-000000000d01'
+\set movement      '00000000-0000-0000-0000-000000000e01'
 
 begin;
 select test.connected_as('ordering_agent');
@@ -62,7 +64,13 @@ select test.refused(format($$select app.advance_order(%L, 'cancelled')$$, :'coun
 select test.refused(format($$select app.record_payment(%L, 10, 'cash')$$, :'chat_order'),
   '42501', '(b) cannot record a payment');
 select test.refused('select * from app.payments', '42501', '(b) cannot read payments');
+select test.refused(format($$select app.reverse_payment(%L, 'x')$$, :'payment'),
+  '42501', '(b) cannot reverse a payment');
 select test.refused('select * from app.stock_movements', '42501', '(b) cannot read stock');
+select test.refused(format($$select app.record_stock_movement(%L, -1, 'x')$$, :'item_a'),
+  '42501', '(b) cannot record a stock movement');
+select test.refused(format($$select app.reverse_stock_movement(%L, 'x')$$, :'movement'),
+  '42501', '(b) cannot reverse a stock movement');
 select test.refused('select * from app.staff', '42501', '(b) cannot read the staff table');
 select test.refused(format($$update app.orders set total = 0 where id = %L$$, :'chat_order'),
   '42501', '(b) cannot rewrite an order total with raw SQL');
