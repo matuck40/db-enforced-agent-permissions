@@ -1,5 +1,7 @@
 # Putting the security boundary in the database
 
+[![CI](https://github.com/matuck40/db-enforced-agent-permissions/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/matuck40/db-enforced-agent-permissions/actions/workflows/ci.yml)
+
 ### What I learned shipping an LLM ordering agent for a real restaurant
 
 **What is in this repository.** A self-contained reimplementation of the permission layer of a client system, not a copy of it: the Postgres schema with row-level security on every table (`schema.sql`), one SQL test suite per database role that exercises the policies from that role's position, a regression test for the bug described below (inside the floor staff suite), a test that the agent role is refused outside its grant (inside the agent suite), and a `docker-compose.yml` that brings up a database to run all of it against. `./run-tests.sh` starts the container and runs everything.
