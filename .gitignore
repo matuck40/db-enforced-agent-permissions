@@ -1,1 +1,14 @@
 .DS_Store
+
+# Secrets never enter the repository
+.env
+.env.*
+*.pem
+*.key
+segredos/
+
+# Local working notes and assistant configuration
+CLAUDE.md
+.claude/
+docs/BRIEFING-agente.md
+docs/superpowers/
