@@ -4,15 +4,27 @@
 #
 #   ./run-tests.sh              run and tear down
 #   KEEP_DB=1 ./run-tests.sh    leave the database up afterwards (port 55432)
+#
+# With PGHOST set, it skips Docker and runs against that database through the
+# local psql (this is how CI uses a service container). The database must be
+# fresh, named app, and trust its logins: the schema creates cluster-wide roles
+# and the role logins have no password.
+#
+#   PGHOST=localhost PGPORT=5432 ./run-tests.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
-psql_as() {
-  docker compose exec -T db psql -X -q -v ON_ERROR_STOP=1 -U "$1" -d app
-}
-
-docker compose down -v --remove-orphans >/dev/null 2>&1 || true
-docker compose up -d --wait --quiet-pull >/dev/null 2>&1
+if [ -n "${PGHOST:-}" ]; then
+  psql_as() {
+    psql -X -q -v ON_ERROR_STOP=1 -U "$1" -d app
+  }
+else
+  psql_as() {
+    docker compose exec -T db psql -X -q -v ON_ERROR_STOP=1 -U "$1" -d app
+  }
+  docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+  docker compose up -d --wait --quiet-pull >/dev/null 2>&1
+fi
 
 # Setup is the only step that runs as the bootstrap superuser.
 psql_as postgres < schema.sql
@@ -36,7 +48,7 @@ for file in tests/[0-9]*_*.sql; do
   echo
 done
 
-if [ "${KEEP_DB:-0}" != 1 ]; then
+if [ -z "${PGHOST:-}" ] && [ "${KEEP_DB:-0}" != 1 ]; then
   docker compose down -v >/dev/null 2>&1
 fi
 
