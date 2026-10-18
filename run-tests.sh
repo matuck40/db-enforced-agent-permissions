@@ -5,16 +5,19 @@
 #   ./run-tests.sh              run and tear down
 #   KEEP_DB=1 ./run-tests.sh    leave the database up afterwards (port 55432)
 #
-# With PGHOST set, it skips Docker and runs against that database through the
-# local psql (this is how CI uses a service container). The database must be
-# fresh, named app, and trust its logins: the schema creates cluster-wide roles
-# and the role logins have no password.
+# With EXTERNAL_DB=1 it skips Docker and runs against the database that the
+# PG* variables point to, through the local psql (this is how CI uses a service
+# container). An explicit switch, not PGHOST alone, because many machines export
+# PGHOST for their own database. That database must be fresh, named app, and
+# trust its logins: the schema creates cluster-wide roles and the role logins
+# have no password.
 #
-#   PGHOST=localhost PGPORT=5432 ./run-tests.sh
+#   EXTERNAL_DB=1 PGHOST=localhost PGPORT=5432 ./run-tests.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ -n "${PGHOST:-}" ]; then
+if [ "${EXTERNAL_DB:-0}" = 1 ]; then
+  echo "Using the database at ${PGHOST:-local socket}:${PGPORT:-5432}"
   psql_as() {
     psql -X -q -v ON_ERROR_STOP=1 -U "$1" -d app
   }
@@ -48,7 +51,7 @@ for file in tests/[0-9]*_*.sql; do
   echo
 done
 
-if [ -z "${PGHOST:-}" ] && [ "${KEEP_DB:-0}" != 1 ]; then
+if [ "${EXTERNAL_DB:-0}" != 1 ] && [ "${KEEP_DB:-0}" != 1 ]; then
   docker compose down -v >/dev/null 2>&1
 fi
 
