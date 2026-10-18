@@ -8,7 +8,7 @@
 segredos/
 
 # Local working notes and assistant configuration
-CLAUDE.md
+CLAUDE.local.md
 .claude/
 docs/BRIEFING-agente.md
 docs/superpowers/
