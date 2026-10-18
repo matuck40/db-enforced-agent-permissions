@@ -12,6 +12,7 @@ permissions:
 jobs:
   sql:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Same image and trust auth as docker-compose.yml: a throwaway database
     # holding only fixtures, created fresh for every run.
     services:
@@ -29,15 +30,17 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The runner image ships the psql client; the script uses it when PGHOST is set.
+      # The runner image ships the psql client; the script uses it with EXTERNAL_DB=1.
       - name: Role test suites
         env:
+          EXTERNAL_DB: "1"
           PGHOST: localhost
           PGPORT: "5432"
         run: ./run-tests.sh
 
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,3 +48,5 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read-only token: the job fails on a leak, it does not comment on the PR.
+          GITLEAKS_ENABLE_COMMENTS: "false"
