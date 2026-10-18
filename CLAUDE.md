@@ -7,21 +7,21 @@ never add a claim to it that the code or a recorded measurement does not back.
 
 ## Roles
 
-| Login            | Post                    | May write through                                   |
+| Role             | Post                    | May write through                                   |
 |------------------|-------------------------|-----------------------------------------------------|
 | `floor_staff`    | counter and service     | `create_order`, `advance_order`                     |
 | `kitchen`        | kitchen                 | `advance_order`, stock movements                    |
 | `cashier`        | till                    | `create_order`, `advance_order`, payments           |
 | `manager`        | management              | everything above                                    |
-| `ordering_agent` | the LLM chat agent      | `create_order` (chat only), `advance_order`         |
+| `ordering_agent` | the LLM chat agent      | `create_order` (chat only), `advance_order` (draft to submitted only) |
 | `app_owner`      | none: owns the schema   | nothing at runtime                                  |
 
-- Every login is a member of `app_user`; its station comes from `app.staff`,
-  looked up by `session_user`.
+- Every role above except `app_owner` is a login and a member of `app_user`;
+  its station comes from `app.staff`, looked up by `session_user`.
 - `app_owner` owns the tables and is the identity the `SECURITY DEFINER`
-  functions run as. It has `BYPASSRLS` and `NOLOGIN`. No application, test
-  fixture or agent connects as it; only `tests/setup.sql` turns its login on,
-  so that `tests/60_app_owner.sql` can prove the append-only triggers hold even
+  functions run as. It has `BYPASSRLS` and `NOLOGIN`. Neither the application
+  nor the agent connects as it; only `tests/setup.sql` turns its login on, so
+  that `tests/60_app_owner.sql` can prove the append-only triggers hold even
   for it.
 
 ## Invariants
@@ -30,8 +30,10 @@ never add a claim to it that the code or a recorded measurement does not back.
 - No role has a direct write grant on any table. Every write is a
   `SECURITY DEFINER` function in `app` that checks the caller's station itself,
   with `set search_path = ''`.
-- Prices always come from `app.menu_items`. A price sent by the caller of
-  `create_order` for a catalog item is ignored.
+- For catalog items the price always comes from `app.menu_items`; a price sent
+  by the caller of `create_order` is ignored. Only `floor_staff`, `cashier`
+  and `manager` may add an open item with a price of their own; the agent may
+  not.
 - Payments and stock movements are append-only. Corrections are reversing
   entries. Every numeric column rejects `NaN`.
 - Station checks use `session_user`, never `current_user`.
