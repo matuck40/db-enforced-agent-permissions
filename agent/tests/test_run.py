@@ -438,6 +438,37 @@ def test_real_mode_default_report_name(monkeypatch, tmp_path):
     )
 
 
+def test_schema_is_repeatable_and_keeps_its_order():
+    args = run_module._parse(
+        ["--mode", "offline", "--config", "all", "--schema", "a.sql", "--schema", "b.sql"]
+    )
+    assert args.schema == [Path("a.sql"), Path("b.sql")]
+    assert run_module._parse([*ARGS]).schema == [Path("schema.sql")]
+
+
+def test_prepare_database_loads_in_order_and_hashes_the_concatenation(tmp_path):
+    import hashlib
+
+    class Recorder:
+        def __init__(self):
+            self.executed: list[str] = []
+
+        def execute(self, text):
+            self.executed.append(text)
+
+    first, second = tmp_path / "1.sql", tmp_path / "2.sql"
+    first.write_text("select 1;\n")
+    second.write_text("select 2;\n")
+    conn = Recorder()
+    sha = run_module.prepare_database(conn, [first, second])
+    assert conn.executed[:2] == ["select 1;\n", "select 2;\n"]
+    assert len(conn.executed) == 3  # then the menu fixtures
+    assert sha == hashlib.sha256(b"select 1;\nselect 2;\n").hexdigest()[:12]
+    # One file alone hashes exactly as before --schema was repeatable.
+    single = run_module.prepare_database(Recorder(), [ROOT / "schema.sql"])
+    assert single == hashlib.sha256((ROOT / "schema.sql").read_bytes()).hexdigest()[:12]
+
+
 def test_main_failure_is_redacted_and_exits_1(monkeypatch, capsys, tmp_path):
     url = "postgresql://postgres:hunter2pw@127.0.0.1:1/app"
     monkeypatch.setenv("EVAL_ADMIN_DATABASE_URL", url)

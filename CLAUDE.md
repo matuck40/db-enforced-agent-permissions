@@ -42,14 +42,30 @@ never add a claim to it that the code or a recorded measurement does not back.
 
 Its whole grant is: read the menu, create a chat order from catalog items (as
 a draft, whole quantities from 1 to 20), read that order's status and total by
-id through `app.chat_order_summary`, and confirm it (draft to submitted).
+id through `app.chat_order_summary`, and confirm it (draft to submitted), all
+within one conversation.
 
-It cannot: list or read orders through the tables, address an order from
-another channel, cancel or advance an order past submitted, order an item that
-is not in the catalog or set its price, record or read payments, read or change
-stock, read staff, switch to another role (including `app_owner`), create
-objects, or write any table with raw SQL. `tests/40_ordering_agent.sql` checks
-each of these from the agent's own login.
+The conversation scope (`migrations/001_conversation_scope.sql`): the harness
+generates a token per conversation (`secrets.token_urlsafe(32)`) and `AgentDB`
+sets it with `set_config('app.conversation', token, true)` as the first
+statement of every transaction, so it never outlives the transaction. The
+database stores only its sha256 (pgcrypto, in schema `extensions`) in
+`app.orders.conversation_hash`, null for orders the agent did not create. For
+the agent, `create_order` refuses a token shorter than 32 characters (42501),
+and `chat_order_summary` and `advance_order` see only chat orders whose hash
+matches the current token; anything else is P0002, like an order that does not
+exist. A null hash never matches, so chat orders created before the migration
+are out of the agent's reach. The token is never logged, never put in an
+exception, the prompt, the graph state or a report.
+
+It cannot: list or read orders through the tables (the hash column included),
+read or confirm a chat order of another conversation even with its id, create
+an order without a conversation token, address an order from another channel,
+cancel or advance an order past submitted, order an item that is not in the
+catalog or set its price, record or read payments, read or change stock, read
+staff, switch to another role (including `app_owner`), create objects, or
+write any table with raw SQL. `tests/40_ordering_agent.sql` checks each of
+these from the agent's own login.
 
 Never widen the agent's grant to make a feature work. Change the feature.
 
@@ -61,6 +77,15 @@ KEEP_DB=1 ./run-tests.sh       # leave it up on 127.0.0.1:55432
 EXTERNAL_DB=1 PGHOST=... PGPORT=... ./run-tests.sh   # a fresh database already running (CI)
 ```
 
+- The current schema is `schema.sql` plus `migrations/*.sql` in name order.
+  `schema.sql` is never edited: it stays the schema from before the first
+  migration, and a fix is a new migration with its tests. Every loader applies
+  them in that order: `run-tests.sh`, `agent/tests/conftest.py`, and the eval
+  runner (`--schema schema.sql --schema migrations/001_...sql`; `--schema
+  schema.sql` alone reproduces the run before the fix).
+- `run-tests.sh` loads `schema.sql`, then `tests/legacy_orders.sql` (rows that
+  exist before the migrations, as the superuser), then the migrations, then
+  `tests/setup.sql`, so the suites see what a migration does to existing rows.
 - One file per role in `tests/`, declaring `-- role: <login>` on its first
   lines. It runs connected as that login, never as a superuser, and must end
   with `\echo 'OK: <role>'`.

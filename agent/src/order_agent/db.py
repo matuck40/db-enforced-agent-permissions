@@ -4,6 +4,13 @@ The connection runs as the ``ordering_agent`` login, so every permission check
 happens in Postgres (roles, RLS, SECURITY DEFINER functions). This module only
 refuses to start under a more powerful role and translates the database's
 refusals into a typed exception.
+
+The conversation token scopes the agent's orders to its conversation (see
+``migrations/001_conversation_scope.sql``). It is set with
+``set_config('app.conversation', token, true)`` as the first statement of every
+transaction, so it lives only as long as that transaction and can never be left
+on a pooled connection for another conversation. It is never logged and never
+put in an exception, the prompt, the graph state or a report.
 """
 
 from __future__ import annotations
@@ -46,8 +53,12 @@ class OrderSummary:
 
 
 class AgentDB:
-    def __init__(self, conn: psycopg.Connection):
+    def __init__(self, conn: psycopg.Connection, conversation_token: str):
         self._conn = conn
+        self._token = conversation_token
+
+    def __repr__(self) -> str:
+        return "AgentDB(<connection>, <conversation token>)"
 
     @classmethod
     def connect(cls, url: str, conversation_token: str) -> AgentDB:
@@ -62,12 +73,10 @@ class AgentDB:
                 raise UnsafeRole(
                     "connection must be the ordering_agent login, without superuser or BYPASSRLS"
                 )
-            conn.execute("select set_config('app.conversation', %s, false)", (conversation_token,))
-            conn.commit()
         except BaseException:
             conn.close()
             raise
-        return cls(conn)
+        return cls(conn, conversation_token)
 
     def close(self) -> None:
         self._conn.close()
@@ -79,8 +88,9 @@ class AgentDB:
         self.close()
 
     def _run(self, sql: str, params: tuple[Any, ...] = ()) -> list[tuple]:
-        """One transaction per call; roll back on any error."""
+        """One transaction per call, scoped to the conversation; roll back on any error."""
         try:
+            self._conn.execute("select set_config('app.conversation', %s, true)", (self._token,))
             rows = self._conn.execute(sql, params).fetchall()
             self._conn.commit()
             return rows

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Run the eval runner against a fresh throwaway Postgres from docker-compose.yml.
 # All arguments go to `python -m evals.run`. Exit code is the runner's.
-#   evals/run.sh --mode offline --config all --schema schema.sql --out evals/reports/offline-latest.md
+#   evals/run.sh --mode offline --config all --schema schema.sql \
+#     --schema migrations/001_conversation_scope.sql --out evals/reports/offline-latest.md
+# --schema repeats: the files load in the order given (schema.sql, then the
+# migrations in name order). --schema schema.sql alone is the schema before them.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

@@ -80,6 +80,8 @@ select test.refused(format($$select app.create_order('chat', 'x',
 select set_config('app.conversation', :'token_one', false) \gset
 select test.refused('select conversation_hash from app.orders', '42501',
   '(b) cannot read the conversation hashes');
+select test.refused('select app.current_conversation_hash()', '42501',
+  '(b) cannot call the hashing helper the functions use');
 
 -- (b) Operations outside the grant. The database refuses each one.
 select test.refused('select * from app.orders', '42501',

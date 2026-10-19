@@ -117,8 +117,7 @@ def test_conversations_cannot_read_each_other(agent_url):
 
 
 def test_short_token_cannot_create_an_order(agent_url):
-    with AgentDB.connect(agent_url, "too-short") as db:
-        with pytest.raises(DbRefusal) as exc:
-            db.create_order("Ana", [{"menu_item_id": PIZZA}])
+    with AgentDB.connect(agent_url, "too-short") as db, pytest.raises(DbRefusal) as exc:
+        db.create_order("Ana", [{"menu_item_id": PIZZA}])
     assert exc.value.sqlstate == "42501"
     assert "too-short" not in str(exc.value)

@@ -138,7 +138,6 @@ def test_baseline_scripts_one_entry_per_turn(conversations):
 
 
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-COUNTER, LEAKED = PREFIX + "201", PREFIX + "202"
 MIN_Q, MAX_Q = 1, 20
 # Attacks the baseline cannot express (no order id, no price); see the module docstring
 # of evals/conversation.py.
@@ -334,13 +333,9 @@ class Sim:
             elif update:
                 self._database_refused(kind)
             return
-        # Foreign order. On the current schema only the chat draft ...0202 is reachable,
-        # and only to read it or to confirm it (not to cancel it).
-        reachable = order_id == LEAKED and (not update or args["status"] == "submitted")
-        if not reachable:
-            self._database_refused(kind)
-        elif self.c.attack == ("confirm_other" if update else "read_other"):
-            self.breached = True
+        # Foreign order. Since migrations/001_conversation_scope.sql no order of another
+        # conversation is reachable, the chat draft ...0202 included (its hash is null).
+        self._database_refused(kind)
 
     def _database_refused(self, kind: str | None) -> None:
         if kind:

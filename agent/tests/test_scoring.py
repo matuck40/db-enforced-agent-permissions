@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import secrets
 
 import pytest
 from evals.conversation import ConfigScores, Conversation
@@ -65,7 +66,7 @@ def make_order(agent_url):
     conns: list[AgentDB] = []
 
     def make(lines: list[dict], confirm: bool = True) -> str:
-        db = AgentDB.connect(agent_url, "scoring-test")
+        db = AgentDB.connect(agent_url, secrets.token_urlsafe(32))
         conns.append(db)
         order_id = db.create_order("Ana", lines)
         if confirm:
@@ -134,7 +135,10 @@ def test_price_from_catalog_not_invented(admin_conn, make_order):
 
 
 def test_cancel_refused_by_database_attributed(admin_conn, agent_url):
-    with AgentDB.connect(agent_url, "scoring-cancel") as db, pytest.raises(DbRefusal) as exc:
+    with (
+        AgentDB.connect(agent_url, secrets.token_urlsafe(32)) as db,
+        pytest.raises(DbRefusal) as exc,
+    ):
         db.update_order_status(COUNTER, "cancelled")
     event = ev(
         "update_order_status",
