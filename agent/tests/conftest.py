@@ -20,8 +20,10 @@ def admin_url() -> str:
 def admin_conn(admin_url):
     # schema.sql creates cluster-wide roles, so it can be loaded only once per
     # server: the database must be fresh (docker compose down -v, then up).
+    # The current schema is schema.sql plus migrations/*.sql in name order.
     conn = psycopg.connect(admin_url, autocommit=True)
-    conn.execute((ROOT / "schema.sql").read_text())
+    for path in [ROOT / "schema.sql", *sorted((ROOT / "migrations").glob("*.sql"))]:
+        conn.execute(path.read_text())
     conn.execute((ROOT / "evals" / "fixtures" / "menu.sql").read_text())
     yield conn
     conn.close()

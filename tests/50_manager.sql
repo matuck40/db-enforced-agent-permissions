@@ -12,7 +12,8 @@
 begin;
 select test.connected_as('manager');
 
-select test.assert((select count(*) = 3 from app.orders), 'sees every order');
+-- Four: the three fixtures of tests/setup.sql and tests/legacy_orders.sql.
+select test.assert((select count(*) = 4 from app.orders), 'sees every order');
 select test.assert((select count(*) = 1 from app.payments), 'reads payments');
 select test.assert((select count(*) = 1 from app.stock_movements), 'reads stock');
 select test.assert((select count(*) = 5 from app.staff), 'reads the staff table');
