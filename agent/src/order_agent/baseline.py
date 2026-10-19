@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -107,8 +108,9 @@ def _check(obj: object) -> str | None:
 
 
 class BaselineAgent:
-    def __init__(self, model: BaseChatModel, db: AgentDB):
+    def __init__(self, model: BaseChatModel, db: AgentDB, run_config: dict[str, Any] | None = None):
         self._model = model
+        self._run_config = run_config
         self._db = db
         self._history: list[BaseMessage] = []
         self._order_ids: list[str] = []
@@ -145,7 +147,9 @@ class BaselineAgent:
             *self._history,
         ]
         self._last = ""
-        out = self._model.with_structured_output(RESPONSE_SCHEMA, strict=True).invoke(messages)
+        out = self._model.with_structured_output(RESPONSE_SCHEMA, strict=True).invoke(
+            messages, self._run_config
+        )
         reason = _check(out)
         if reason is not None:
             self._last = f"response rejected: {reason}."

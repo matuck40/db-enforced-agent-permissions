@@ -56,6 +56,7 @@ from order_agent.graph import RUN_CONFIG, build_graph
 from order_agent.models import make_model
 from order_agent.prompt import PROMPT_VERSION
 from order_agent.redact import redact
+from order_agent.tracing import flush, make_callbacks
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIGS: tuple[Config, ...] = get_args(Config)  # ("baseline", "tools", "tools_unguarded")
@@ -106,11 +107,14 @@ def _error_text(exc: Exception) -> str:
     return redact(str(exc)) or type(exc).__name__
 
 
-def _graph_run(conv: Conversation, config: Config, model, db: AgentDB) -> RunResult:
+def _graph_run(
+    conv: Conversation, config: Config, model, db: AgentDB, tracing: dict[str, Any] | None = None
+) -> RunResult:
     graph = build_graph(model, db, guarded=config == "tools")
     cfg: dict[str, Any] = {
         **RUN_CONFIG,
         "configurable": {"thread_id": f"{conv.id}-{config}"},
+        **(tracing or {}),
     }
     cart_lines: list[tuple[str, int]] = []
     error = None
@@ -144,8 +148,10 @@ def _graph_run(conv: Conversation, config: Config, model, db: AgentDB) -> RunRes
     )
 
 
-def _baseline_run(conv: Conversation, model, db: AgentDB) -> RunResult:
-    agent = BaselineAgent(model, db)
+def _baseline_run(
+    conv: Conversation, model, db: AgentDB, tracing: dict[str, Any] | None = None
+) -> RunResult:
+    agent = BaselineAgent(model, db, tracing)
     replies: list[str] = []
     events: list[Event] = []
     order_ids: list[str] = []
@@ -174,13 +180,16 @@ def run_conversation(
     db_factory: Callable[[str], AgentDB],
     admin_conn,
     callbacks: Sequence[Any] = (),
+    tracing: dict[str, Any] | None = None,
 ) -> RunResult:
     """Run one conversation in one configuration.
 
     The conversation token is created here and handed only to ``db_factory``; it never
     reaches the model, the prompt, the state or the report. ``callbacks`` are attached to
     the model itself, so they see every chat-model call of all three configurations (the
-    graph's and the baseline's structured-output call alike), once each.
+    graph's and the baseline's structured-output call alike), once each. ``tracing`` is an
+    optional run config (``callbacks``, ``run_name``, ``metadata``) for one trace per
+    conversation; it carries no token either, and it is never set offline.
     """
     if callbacks:
         model.callbacks = [*(model.callbacks or []), *callbacks]
@@ -189,8 +198,8 @@ def run_conversation(
     db = db_factory(token)
     try:
         if config == "baseline":
-            return _baseline_run(conv, model, db)
-        return _graph_run(conv, config, model, db)
+            return _baseline_run(conv, model, db, tracing)
+        return _graph_run(conv, config, model, db, tracing)
     finally:
         db.close()
 
@@ -265,6 +274,10 @@ def run_real(
     model_name: str,
     prices: dict[str, Any],
     max_usd: float,
+    settings: Settings | None = None,
+    config_date: date | None = None,
+    prompt_version: str = PROMPT_VERSION,
+    schema_sha: str = "",
 ) -> RealOutcome:
     """Run every conversation in every configuration with a real model, under a cost cap.
 
@@ -276,6 +289,8 @@ def run_real(
     conversations = load_conversations(directory)
     outcome = RealOutcome(scores={config: [] for config in configs})
     handler = UsageHandler(model_name, prices, max_usd)
+    tracers = make_callbacks(settings, "real") if settings is not None else []
+    day = (config_date or date.today()).isoformat()
 
     def factory(token: str) -> AgentDB:
         return AgentDB.connect(agent_url, token)
@@ -288,6 +303,19 @@ def run_real(
             if handler.over_cap:
                 break
             before = handler.total_usd
+            tracing = (
+                {
+                    "callbacks": tracers,
+                    "run_name": conv.id,
+                    "metadata": {
+                        "langfuse_session_id": f"{day}-{config}",
+                        "prompt_version": prompt_version,
+                        "schema_sha": schema_sha,
+                    },
+                }
+                if tracers
+                else None
+            )
             run = run_conversation(
                 conv,
                 config,
@@ -295,11 +323,13 @@ def run_real(
                 factory,
                 admin_conn,  # type: ignore[arg-type]
                 callbacks=[handler],
+                tracing=tracing,
             )
             run = replace(run, cost_usd=handler.total_usd - before)
             outcome.scores[config].append((conv.id, score(conv, run, admin_conn, config)))  # type: ignore[arg-type]
             if run.error:
                 outcome.errors.append((conv.id, config, run.error))
+    flush(tracers)
     outcome.cost_usd = handler.total_usd
     outcome.calls_without_usage = handler.calls_without_usage
     outcome.partial = handler.over_cap
@@ -400,6 +430,8 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
             model_name,
             prices,
             cap,
+            settings=settings,
+            schema_sha=schema_sha,
         )
     meta = ReportMeta(
         date=date.today(),
