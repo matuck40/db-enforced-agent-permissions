@@ -21,7 +21,9 @@ def test_tool_calls_become_aimessage_tool_calls():
     first = bound.invoke([HumanMessage("hi")])
     second = bound.invoke([HumanMessage("hi")])
     assert isinstance(first, AIMessage)
-    assert first.tool_calls == [{"name": "a", "args": {"x": 1}, "id": "call_0", "type": "tool_call"}]
+    assert first.tool_calls == [
+        {"name": "a", "args": {"x": 1}, "id": "call_0", "type": "tool_call"}
+    ]
     assert [c["id"] for c in second.tool_calls] == ["call_1", "call_2"]
 
 
@@ -73,6 +75,8 @@ def test_usage_metadata_default_and_configured():
         ]
     )
     assert model.invoke([HumanMessage("x")]).usage_metadata == {
-        "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
     }
     assert model.invoke([HumanMessage("x")]).usage_metadata["total_tokens"] == 5
