@@ -29,6 +29,20 @@ def node(db):
     return graph.compile()
 
 
+def call_many(node, calls, **state):
+    """Invoke several tool calls carried by one AIMessage; return the final state."""
+    tool_calls = [{"name": n, "args": a, "id": f"call-{i}"} for i, (n, a) in enumerate(calls)]
+    full = {
+        "messages": [AIMessage(content="", tool_calls=tool_calls)],
+        "cart": {},
+        "order_ids": [],
+        "events": [],
+        "handoff_reason": None,
+        **state,
+    }
+    return node.invoke(full)
+
+
 def call(node, name, args, **state):
     """Invoke one tool call; return (tool message text, final state)."""
     ai = AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": "call-1"}])
@@ -72,7 +86,11 @@ def test_submit_uses_catalog_price(node):
     assert Decimal("84.00") == Decimal(text.rsplit(" ", 1)[1])
     assert [e.decided_by for e in update["events"]] == ["database"]
     assert update["events"][0].outcome == "ok"
-    assert update["cart"] == {}
+    assert update["cart"] == {PIZZA: 2}
+    assert update["events"][0].args == {
+        "customer_label": "Ana",
+        "lines": [{"menu_item_id": PIZZA, "quantity": 2}],
+    }
 
 
 def test_submit_empty_cart_does_not_touch_db(node, admin_conn):
@@ -146,3 +164,57 @@ def test_model_sees_only_real_arguments(db):
     assert shown["submit_order"] == {"customer_label"}
     assert shown["add_to_cart"] == {"menu_item_id", "quantity"}
     assert shown["get_menu"] == set()
+
+
+OTHER = "00000000-0000-0000-0000-000000000102"
+
+
+def test_parallel_adds_of_different_items_both_land(node):
+    out = call_many(
+        node,
+        [
+            ("add_to_cart", {"menu_item_id": PIZZA, "quantity": 1}),
+            ("add_to_cart", {"menu_item_id": OTHER, "quantity": 3}),
+        ],
+    )
+    assert out["cart"] == {PIZZA: 1, OTHER: 3}
+
+
+def test_parallel_adds_of_same_item_do_not_error(node):
+    # add_to_cart sets the quantity, so with the same item twice one value wins.
+    out = call_many(
+        node,
+        [
+            ("add_to_cart", {"menu_item_id": PIZZA, "quantity": 1}),
+            ("add_to_cart", {"menu_item_id": PIZZA, "quantity": 2}),
+        ],
+    )
+    assert out["cart"][PIZZA] in (1, 2)
+
+
+def test_add_and_submit_in_one_turn_refuses_submit(node, admin_conn):
+    before = order_count(admin_conn)
+    out = call_many(
+        node,
+        [
+            ("add_to_cart", {"menu_item_id": PIZZA, "quantity": 1}),
+            ("submit_order", {"customer_label": "Ana"}),
+        ],
+        cart={PIZZA: 1},
+    )
+    assert order_count(admin_conn) == before
+    assert out["order_ids"] == []
+    (event,) = out["events"]
+    assert (event.tool, event.decided_by, event.outcome) == ("submit_order", "tool", "refused")
+
+
+def test_two_submits_in_one_turn_create_nothing(node, admin_conn):
+    before = order_count(admin_conn)
+    out = call_many(
+        node,
+        [("submit_order", {"customer_label": "Ana"})] * 2,
+        cart={PIZZA: 1},
+    )
+    assert order_count(admin_conn) == before
+    assert out["order_ids"] == []
+    assert [e.decided_by for e in out["events"]] == ["tool", "tool"]

@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 
 from order_agent.db import AgentDB, DbRefusal
 from order_agent.events import Event
+from order_agent.state import merge_cart
 
 
 def _refusal_text(refusal: DbRefusal) -> str:
@@ -25,6 +26,13 @@ def _refusal_text(refusal: DbRefusal) -> str:
 
 def _reply(call_id: str, text: str, **update) -> Command:
     return Command(update={"messages": [ToolMessage(text, tool_call_id=call_id)], **update})
+
+
+def _last_ai_calls(messages: list) -> list[dict]:
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            return list(message.tool_calls)
+    return []
 
 
 def make_tools(db: AgentDB) -> list[BaseTool]:
@@ -55,9 +63,10 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
         call_id: Annotated[str, InjectedToolCallId],
         cart: Annotated[dict[str, int], InjectedState("cart")],
     ) -> Command:
-        """Put a menu item in the cart. Args: menu_item_id (menu item id), quantity (units)."""
-        new = {**cart, menu_item_id: quantity}
-        return _reply(call_id, f"cart: {new}", cart=new)
+        """Put a menu item in the cart. Args: menu_item_id (menu item id), quantity (units).
+        Sets the quantity for that item (it does not add to an earlier quantity)."""
+        new = merge_cart(cart, {menu_item_id: quantity})
+        return _reply(call_id, f"cart: {new}", cart={menu_item_id: quantity})
 
     @tool
     def remove_from_cart(
@@ -66,8 +75,8 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
         cart: Annotated[dict[str, int], InjectedState("cart")],
     ) -> Command:
         """Remove a menu item from the cart. Args: menu_item_id (menu item id)."""
-        new = {k: v for k, v in cart.items() if k != menu_item_id}
-        return _reply(call_id, f"cart: {new}", cart=new)
+        new = merge_cart(cart, {menu_item_id: None})
+        return _reply(call_id, f"cart: {new}", cart={menu_item_id: None})
 
     @tool
     def submit_order(
@@ -75,23 +84,41 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
         call_id: Annotated[str, InjectedToolCallId],
         cart: Annotated[dict[str, int], InjectedState("cart")],
         order_ids: Annotated[list[str], InjectedState("order_ids")],
+        messages: Annotated[list, InjectedState("messages")],
     ) -> Command:
         """Create the order from the cart. Args: customer_label (name for the order).
+        Call it alone in its own turn, after the cart is final.
         Returns the order id and the total computed by the database."""
-        args = {"customer_label": customer_label}
-        reason = "cart is empty" if not cart else "an order was already submitted"
-        if not cart or order_ids:
+        lines = [{"menu_item_id": k, "quantity": q} for k, q in cart.items()]
+        args = {"customer_label": customer_label, "lines": lines}
+        turn_calls = _last_ai_calls(messages)
+        reason = None
+        if not cart:
+            reason = "cart is empty"
+        elif order_ids:
+            reason = "an order was already submitted"
+        elif any(c["name"] != "submit_order" for c in turn_calls) or (
+            sum(c["name"] == "submit_order" for c in turn_calls) > 1
+        ):
+            reason = "submit_order must be called alone in its own turn"
+        if reason:
             event = Event("submit_order", args, "tool", "refused", reason)
             return _reply(call_id, f"refused: {reason}", events=[event])
 
-        def run():
-            lines = [{"menu_item_id": k, "quantity": q} for k, q in cart.items()]
+        try:
             order_id = db.create_order(customer_label, lines)
+        except DbRefusal as refusal:
+            event = Event("submit_order", args, "database", "refused", refusal.sqlstate)
+            return _reply(call_id, _refusal_text(refusal), events=[event])
+        try:
             summary = db.order_summary(order_id)
-            text = f"order {order_id} created, total {summary.total}"
-            return text, {"order_ids": [order_id], "cart": {}}
-
-        return db_call("submit_order", args, call_id, run)
+        except DbRefusal as refusal:
+            # The order exists even though reading it back was refused.
+            event = Event("submit_order", args, "database", "refused", refusal.sqlstate)
+            return _reply(call_id, _refusal_text(refusal), events=[event], order_ids=[order_id])
+        event = Event("submit_order", args, "database", "ok", "")
+        text = f"order {order_id} created, total {summary.total}"
+        return _reply(call_id, text, events=[event], order_ids=[order_id])
 
     @tool
     def get_order_status(order_id: str, call_id: Annotated[str, InjectedToolCallId]) -> Command:
