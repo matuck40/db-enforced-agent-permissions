@@ -13,7 +13,7 @@ from order_agent.baseline import (
     RESPONSE_SCHEMA,
     BaselineAgent,
 )
-from order_agent.db import AgentDB
+from order_agent.db import AgentDB, DbRefusal
 from order_agent.fake import ScriptedChatModel
 
 OFF_MENU = "00000000-0000-0000-0000-000000000111"
@@ -53,7 +53,8 @@ def test_baseline_submit_prices_from_catalog(db, admin_conn):
     first = model.calls[0]
     assert isinstance(first[0], SystemMessage) and first[0].content == BASELINE_PROMPT
     assert PIZZA in first[1].content and "42.00" in first[1].content
-    assert isinstance(first[2], HumanMessage) and first[2].content == "two pizzas, yes"
+    assert first[2].content == "No order yet."
+    assert isinstance(first[3], HumanMessage) and first[3].content == "two pizzas, yes"
 
 
 def test_baseline_confirm_submits_own_order(db, admin_conn):
@@ -72,6 +73,7 @@ def test_baseline_confirm_submits_own_order(db, admin_conn):
     second = model.calls[1]
     assert [type(m).__name__ for m in second] == [
         "SystemMessage",
+        "HumanMessage",
         "HumanMessage",
         "HumanMessage",
         "AIMessage",
@@ -142,3 +144,72 @@ def test_baseline_human_action_sets_handoff(db):
     assert out.handoff is True
     assert out.reply == "A person will help."
     assert out.events == []
+
+
+def status_of(model, call: int) -> str:
+    return model.calls[call][2].content
+
+
+def test_baseline_status_first_turn_and_after_success(db):
+    model = ScriptedChatModel(script=[reply(), reply("submit", [line()]), reply()])
+    agent = BaselineAgent(model, db)
+    agent.turn("hi")
+    agent.turn("two pizzas")
+    agent.turn("thanks")
+    assert status_of(model, 0) == "No order yet."
+    assert "order created as a draft, database total 84.00." in status_of(model, 2)
+    assert "Current order: draft, database total 84.00." in status_of(model, 2)
+    # status is not stored in history: only customer and reply messages follow it
+    assert [type(m).__name__ for m in model.calls[2][3:]] == [
+        "HumanMessage",
+        "AIMessage",
+        "HumanMessage",
+        "AIMessage",
+        "HumanMessage",
+    ]
+    assert all("Last action" not in m.content for m in model.calls[2][3:])
+
+
+def test_baseline_status_after_refusals(db):
+    model = ScriptedChatModel(
+        script=[reply("submit", [line(OFF_MENU, 1)]), reply("submit"), reply("confirm"), reply()]
+    )
+    agent = BaselineAgent(model, db)
+    agent.turn("a")
+    agent.turn("b")
+    agent.turn("c")
+    agent.turn("d")
+    assert "Last action: submit - refused by the database (" in status_of(model, 1)
+    assert "cart is empty" in status_of(model, 2)
+    assert "confirm - refused: there is no order yet." in status_of(model, 3)
+
+
+class SummaryRefusingDB:
+    """Stand-in whose order_summary is always refused after the order was created."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def menu(self):
+        return self._real.menu()
+
+    def create_order(self, label, lines):
+        return self._real.create_order(label, lines)
+
+    def order_summary(self, order_id):
+        raise DbRefusal("42501", "denied")
+
+
+def test_baseline_summary_refusal_keeps_order_id(db):
+    model = ScriptedChatModel(script=[reply("submit", [line(qty=1)]), reply("submit", [line()])])
+    agent = BaselineAgent(model, SummaryRefusingDB(db))
+    first = agent.turn("one pizza")
+    assert len(first.order_ids) == 1
+    assert [(e.tool, e.decided_by, e.outcome, e.detail) for e in first.events] == [
+        ("submit", "database", "ok", ""),
+        ("order_summary", "database", "refused", "42501"),
+    ]
+    second = agent.turn("again")
+    assert len(second.order_ids) == 1
+    assert second.events[0].decided_by == "tool"
+    assert "unreadable (refused by the database, 42501)" in status_of(model, 1)
