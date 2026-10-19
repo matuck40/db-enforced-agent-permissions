@@ -33,3 +33,14 @@ def test_text_without_secrets_unchanged():
 def test_url_without_password_unchanged():
     text = "postgresql://agent@db.example/shop"
     assert redact(text) == text
+
+
+def test_redact_driver_suffixed_urls():
+    for scheme in ("postgresql+psycopg", "postgresql+asyncpg", "postgres"):
+        out = redact(f"x {scheme}://agent:hunter2fake@db:5432/shop y")
+        assert out == f"x {scheme}://agent:{R}@db:5432/shop y"
+
+
+def test_redact_password_with_raw_at_sign():
+    out = redact("postgresql://agent:p@ss@db.example:5432/shop?sslmode=require")
+    assert out == f"postgresql://agent:{R}@db.example:5432/shop?sslmode=require"

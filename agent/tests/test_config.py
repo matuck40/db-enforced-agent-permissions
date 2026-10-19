@@ -20,6 +20,12 @@ def test_unknown_provider_rejected():
         Settings.from_env({**BASE, "AGENT_PROVIDER": "nope"})
 
 
+def test_unknown_provider_error_does_not_echo_value():
+    with pytest.raises(ValueError) as exc:
+        Settings.from_env({**BASE, "AGENT_PROVIDER": "sk-FAKEFAKEFAKEFAKEFAKE1234"})
+    assert "sk-FAKE" not in str(exc.value)
+
+
 def test_database_url_required():
     with pytest.raises(ValueError, match="AGENT_DATABASE_URL"):
         Settings.from_env({})

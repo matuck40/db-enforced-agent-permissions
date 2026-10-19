@@ -23,7 +23,7 @@ class Settings:
             raise ValueError("AGENT_DATABASE_URL is required")
         provider = env.get("AGENT_PROVIDER") or "openai"
         if provider not in PROVIDERS:
-            raise ValueError(f"AGENT_PROVIDER must be one of {PROVIDERS}, got {provider!r}")
+            raise ValueError(f"AGENT_PROVIDER must be one of {PROVIDERS}")
         langfuse = all(
             env.get(k) for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST")
         )
