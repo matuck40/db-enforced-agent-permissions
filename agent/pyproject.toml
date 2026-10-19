@@ -1,0 +1,31 @@
+[project]
+name = "order_agent"
+version = "0.1.0"
+description = "LLM ordering agent confined by Postgres roles and RLS"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-anthropic>=1.7.6",
+    "langchain-core>=1.6.12",
+    "langchain-openai>=1.7.2",
+    "langgraph>=1.2.16",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# evals/ lives at the repository root, next to schema.sql.
+pythonpath = [".."]
+
+[tool.ruff]
+line-length = 100
