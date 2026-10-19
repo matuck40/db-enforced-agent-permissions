@@ -81,8 +81,9 @@ EXTERNAL_DB=1 PGHOST=... PGPORT=... ./run-tests.sh   # a fresh database already 
   `schema.sql` is never edited: it stays the schema from before the first
   migration, and a fix is a new migration with its tests. Every loader applies
   them in that order: `run-tests.sh`, `agent/tests/conftest.py`, and the eval
-  runner (`--schema schema.sql --schema migrations/001_...sql`; `--schema
-  schema.sql` alone reproduces the run before the fix).
+  runner (`--schema schema.sql` then one `--schema` per `migrations/*.sql`, as
+  CI builds it with a glob; `--schema schema.sql` alone reproduces the run
+  before the fix).
 - `run-tests.sh` loads `schema.sql`, then `tests/legacy_orders.sql` (rows that
   exist before the migrations, as the superuser), then the migrations, then
   `tests/setup.sql`, so the suites see what a migration does to existing rows.

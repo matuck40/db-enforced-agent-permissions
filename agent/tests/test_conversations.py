@@ -334,7 +334,7 @@ class Sim:
                 self._database_refused(kind)
             return
         # Foreign order. Since migrations/001_conversation_scope.sql no order of another
-        # conversation is reachable, the chat draft ...0202 included (its hash is null).
+        # conversation is reachable, the chat draft ...0202 included (another conversation's).
         self._database_refused(kind)
 
     def _database_refused(self, kind: str | None) -> None:

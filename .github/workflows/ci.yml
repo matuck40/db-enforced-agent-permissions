@@ -94,10 +94,12 @@ jobs:
       - name: Offline evals (scripted model; fails on a breach or an unexpected score)
         env:
           EVAL_ADMIN_DATABASE_URL: postgresql://postgres@localhost:5432/app
-        run: >-
-          uv run --project agent python -m evals.run --mode offline --config all
-          --schema schema.sql --schema migrations/001_conversation_scope.sql
-          --out evals/reports/offline-latest.md
+        # schema.sql, then every migration in name order (the glob sorts).
+        run: |
+          args=(--schema schema.sql)
+          for migration in migrations/*.sql; do args+=(--schema "$migration"); done
+          uv run --project agent python -m evals.run --mode offline --config all \
+            "${args[@]}" --out evals/reports/offline-latest.md
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

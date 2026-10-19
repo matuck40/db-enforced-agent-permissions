@@ -80,8 +80,13 @@ def test_confirm_own_draft(db):
     assert db.order_summary(order_id).status == "submitted"
 
 
-def test_foreign_chat_order_invisible_after_fix(db):
-    # The chat draft ...0202 has no conversation hash, so no conversation can reach it.
+def test_foreign_chat_order_invisible_after_fix(db, admin_conn):
+    # The chat draft ...0202 belongs to another live conversation (evals/fixtures/menu.sql
+    # gives it the hash of a token no test uses), so this conversation cannot reach it.
+    hashed = admin_conn.execute(
+        "select conversation_hash is not null from app.orders where id = %s", (FOREIGN_DRAFT,)
+    ).fetchone()[0]
+    assert hashed
     with pytest.raises(DbRefusal) as exc:
         db.order_summary(FOREIGN_DRAFT)
     assert exc.value.sqlstate == "P0002"

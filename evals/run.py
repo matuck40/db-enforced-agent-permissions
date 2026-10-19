@@ -6,7 +6,7 @@
 
 ``--schema`` is repeatable: the files are loaded in the order given, and the report's
 ``schema_sha`` is taken over their concatenation. The current schema is ``schema.sql``
-plus ``migrations/*.sql`` in name order; ``--schema schema.sql`` alone reproduces the
+plus every ``migrations/*.sql`` in name order (pass one ``--schema`` per file); ``--schema schema.sql`` alone reproduces the
 run from before the conversation-scope fix (its gate fails: the expected scores are
 those of the current schema).
 

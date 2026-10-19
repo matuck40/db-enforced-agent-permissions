@@ -1,7 +1,7 @@
 -- Fixtures for the agent tests and evals. Load as the superuser, once, right
 -- after schema.sql. Invented, generic data with fixed ids so tests can name them.
--- Only columns that exist today: this file must load on the schema as it is now
--- and on later versions that add nullable columns.
+-- Only columns of schema.sql in the inserts: this file must load on schema.sql
+-- alone (the run before the migrations) and on schema.sql plus migrations/*.sql.
 
 insert into app.staff (db_user, station) values ('ordering_agent', 'ordering_agent');
 
@@ -25,3 +25,22 @@ insert into app.menu_items (id, name, price, active) values
 insert into app.orders (id, channel, customer_label, status, total, created_by) values
   ('00000000-0000-0000-0000-000000000201', 'counter', 'Table 4',     'submitted', 42.00, 'floor_staff'),
   ('00000000-0000-0000-0000-000000000202', 'chat',    'Other chat customer', 'draft', 8.50, 'floor_staff');
+
+-- Since migrations/001_conversation_scope.sql, the draft ...0202 belongs to another
+-- live conversation: its hash is the sha256 of a fixed token that no eval run uses
+-- (each run generates its own). Only when the column exists, so this file still
+-- loads, unchanged in effect, on schema.sql alone. pg_catalog.sha256 gives the same
+-- bytes as pgcrypto's digest(..., 'sha256').
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'app' and table_name = 'orders'
+               and column_name = 'conversation_hash') then
+    execute $sql$
+      update app.orders
+      set conversation_hash = pg_catalog.sha256(pg_catalog.convert_to(
+        'GDU9xsYp6yMmULnsMdTLQ5MvTfNH1H0izepGErbf7w4', 'UTF8'))
+      where id = '00000000-0000-0000-0000-000000000202'
+    $sql$;
+  end if;
+end $$;
