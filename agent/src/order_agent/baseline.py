@@ -10,7 +10,7 @@ The database still decides every write.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -80,6 +80,8 @@ class BaselineTurn:
     events: list[Event]
     handoff: bool
     order_ids: list[str]
+    # The (menu_item_id, quantity) lines of the cart the validator accepted this turn.
+    cart_lines: list[tuple[str, int]] = field(default_factory=list)
 
 
 def _check(obj: object) -> str | None:
@@ -157,7 +159,10 @@ class BaselineAgent:
             events = self._submit(out["cart"])
         elif action == "confirm":
             events = [self._confirm()]
-        return BaselineTurn(out["reply"], events, action == "human", list(self._order_ids))
+        cart_lines = [(c["menu_item_id"], c["quantity"]) for c in out["cart"]]
+        return BaselineTurn(
+            out["reply"], events, action == "human", list(self._order_ids), cart_lines
+        )
 
     def _submit(self, cart: list[dict]) -> list[Event]:
         lines = [{"menu_item_id": c["menu_item_id"], "quantity": c["quantity"]} for c in cart]

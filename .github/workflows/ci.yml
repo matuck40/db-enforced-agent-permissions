@@ -68,6 +68,41 @@ jobs:
           EVAL_ADMIN_DATABASE_URL: postgresql://postgres@localhost:5432/app
         run: uv run pytest -q
 
+  evals-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Own database: the runner loads schema.sql itself, and it can be loaded once per server.
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d app"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked --project agent
+      - name: Offline evals (scripted model; fails on a breach or an unexpected score)
+        env:
+          EVAL_ADMIN_DATABASE_URL: postgresql://postgres@localhost:5432/app
+        run: >-
+          uv run --project agent python -m evals.run --mode offline --config all
+          --schema schema.sql --out evals/reports/offline-latest.md
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: offline-eval-report
+          path: evals/reports/offline-latest.md
+          if-no-files-found: warn
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 10

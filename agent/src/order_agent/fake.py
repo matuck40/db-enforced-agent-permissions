@@ -33,6 +33,11 @@ class ScriptedChatModel(BaseChatModel):
     def _llm_type(self) -> str:
         return "scripted-fake"
 
+    @property
+    def consumed(self) -> int:
+        """How many script entries the model has used so far."""
+        return self._cursor
+
     def _next(self, messages: list[BaseMessage], *, structured: bool) -> dict[str, Any]:
         self.calls.append(list(messages))
         index = self._cursor
