@@ -9,17 +9,26 @@ measures the harness and the database, not model behaviour. The offline gate fai
 script is expected to produce, a script that is not fully consumed (or runs out), or an
 attack attempt that no layer refused and that did not breach (a harness warning).
 Breaches in ``tools_unguarded`` do not fail the gate: that is what a later task measures.
+
+Real mode (``--mode real``) uses the provider model of ``AGENT_MODEL`` for every
+configuration, ignores the scripts and has no gate: the report is the product. It needs
+``AGENT_MODEL``, the key of ``AGENT_PROVIDER`` and ``EVAL_MAX_USD`` (a positive number), and
+a filled-in ``evals/prices.toml``; anything missing is an error (exit 2) before any model call.
+After every model call the running cost is compared to the cap. Once it is over, the model
+call in flight finishes, the current conversation stops, no later conversation starts, and the
+report is written with ``Partial run: yes``.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import os
 import secrets
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any, get_args
@@ -29,13 +38,16 @@ import psycopg
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from evals.conversation import Conversation, load_conversations
+from evals.cost import PRICES_PATH, PriceError, UsageHandler, load_prices, model_prices
 from evals.report import ReportMeta, write_report
 from evals.scoring import Config, RunResult, Score, score
 from order_agent.baseline import BASELINE_PROMPT_VERSION, BaselineAgent
+from order_agent.config import PROVIDERS, Settings
 from order_agent.db import AgentDB
 from order_agent.events import Event
 from order_agent.fake import ScriptedChatModel
 from order_agent.graph import RUN_CONFIG, build_graph
+from order_agent.models import make_model
 from order_agent.prompt import PROMPT_VERSION
 from order_agent.redact import redact
 
@@ -83,14 +95,17 @@ def fixture_reset(admin_conn) -> None:
     )
 
 
-def _graph_run(conv: Conversation, config: Config, model, db: AgentDB, callbacks) -> RunResult:
+def _error_text(exc: Exception) -> str:
+    """The redacted message of a failure; a blank message (a bare timeout) names the type."""
+    return redact(str(exc)) or type(exc).__name__
+
+
+def _graph_run(conv: Conversation, config: Config, model, db: AgentDB) -> RunResult:
     graph = build_graph(model, db, guarded=config == "tools")
     cfg: dict[str, Any] = {
         **RUN_CONFIG,
         "configurable": {"thread_id": f"{conv.id}-{config}"},
     }
-    if callbacks:
-        cfg["callbacks"] = list(callbacks)
     cart_lines: list[tuple[str, int]] = []
     error = None
     handoff = False
@@ -105,7 +120,7 @@ def _graph_run(conv: Conversation, config: Config, model, db: AgentDB, callbacks
                 handoff = True
                 break
     except Exception as exc:  # noqa: BLE001 - any model/graph failure ends this conversation
-        error = redact(str(exc))
+        error = _error_text(exc)
     values = graph.get_state(cfg).values
     replies = [
         m.content if isinstance(m.content, str) else str(m.content)
@@ -141,7 +156,7 @@ def _baseline_run(conv: Conversation, model, db: AgentDB) -> RunResult:
                 handoff = True
                 break
     except Exception as exc:  # noqa: BLE001
-        error = redact(str(exc))
+        error = _error_text(exc)
         order_ids = list(agent._order_ids)  # orders created before the failure still count
     return RunResult(replies, events, order_ids, handoff, error, 0.0, cart_lines)
 
@@ -157,16 +172,19 @@ def run_conversation(
     """Run one conversation in one configuration.
 
     The conversation token is created here and handed only to ``db_factory``; it never
-    reaches the model, the prompt, the state or the report. ``callbacks`` apply to the
-    graph configurations (the baseline model is called without a run config).
+    reaches the model, the prompt, the state or the report. ``callbacks`` are attached to
+    the model itself, so they see every chat-model call of all three configurations (the
+    graph's and the baseline's structured-output call alike), once each.
     """
+    if callbacks:
+        model.callbacks = [*(model.callbacks or []), *callbacks]
     fixture_reset(admin_conn)
     token = secrets.token_urlsafe(32)
     db = db_factory(token)
     try:
         if config == "baseline":
             return _baseline_run(conv, model, db)
-        return _graph_run(conv, config, model, db, callbacks)
+        return _graph_run(conv, config, model, db)
     finally:
         db.close()
 
@@ -217,6 +235,64 @@ def run_offline(
     return outcome
 
 
+@dataclass
+class RealOutcome:
+    scores: dict[str, list[tuple[str, Score]]] = field(default_factory=dict)
+    errors: list[tuple[str, str, str]] = field(default_factory=list)  # conversation, config, text
+    cost_usd: float = 0.0
+    partial: bool = False
+    n_conversations: int = 0
+
+
+def run_real(
+    directory: Path,
+    configs: Sequence[str],
+    admin_conn,
+    agent_url: str,
+    make_model_fn: Callable[[], Any],
+    model_name: str,
+    prices: dict[str, Any],
+    max_usd: float,
+) -> RealOutcome:
+    """Run every conversation in every configuration with a real model, under a cost cap.
+
+    ``make_model_fn`` builds a fresh model per run (the same model for all configurations).
+    Customer turns are fixed; the scripts are not used. A failure in one run (a provider
+    error, a timeout) is recorded as that run's error and the run goes on.
+    """
+    model_prices(model_name, prices)  # fails before any model exists
+    conversations = load_conversations(directory)
+    outcome = RealOutcome(scores={config: [] for config in configs})
+    handler = UsageHandler(model_name, prices, max_usd)
+
+    def factory(token: str) -> AgentDB:
+        return AgentDB.connect(agent_url, token)
+
+    for conv in conversations:
+        if handler.over_cap:
+            break
+        outcome.n_conversations += 1
+        for config in configs:
+            if handler.over_cap:
+                break
+            before = handler.total_usd
+            run = run_conversation(
+                conv,
+                config,
+                make_model_fn(),
+                factory,
+                admin_conn,  # type: ignore[arg-type]
+                callbacks=[handler],
+            )
+            run = replace(run, cost_usd=handler.total_usd - before)
+            outcome.scores[config].append((conv.id, score(conv, run, admin_conn, config)))  # type: ignore[arg-type]
+            if run.error:
+                outcome.errors.append((conv.id, config, run.error))
+    outcome.cost_usd = handler.total_usd
+    outcome.partial = handler.over_cap
+    return outcome
+
+
 def _check(
     conv: Conversation, config: str, run: RunResult, result: Score, model, script_len: int
 ) -> list[str]:
@@ -248,20 +324,92 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--mode", choices=["offline", "real"], required=True)
     p.add_argument("--config", choices=[*CONFIGS, "all"], required=True)
     p.add_argument("--schema", type=Path, required=True)
-    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--out", type=Path, help="report path (default for real: evals/reports/)")
     return p.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parse(argv)
-    if args.mode == "real":
-        print("error: --mode real is implemented in Task 12", file=sys.stderr)
-        return 2
+def default_real_out(today: date) -> Path:
+    return ROOT / "evals" / "reports" / f"{today.isoformat()}-real.md"
+
+
+class UsageError(Exception):
+    """A missing or invalid setting: reported as ``error: ...`` with exit code 2."""
+
+
+def _real_settings(admin_url: str | None) -> tuple[Settings, float]:
+    """Check everything real mode needs, before any database or model work."""
+    env = os.environ
+    if not admin_url:
+        raise UsageError("EVAL_ADMIN_DATABASE_URL is not set")
+    if not env.get("AGENT_MODEL"):
+        raise UsageError("AGENT_MODEL is required in real mode")
+    provider = env.get("AGENT_PROVIDER") or "openai"
+    if provider not in PROVIDERS:
+        raise UsageError(f"AGENT_PROVIDER must be one of {PROVIDERS}")
+    key = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}[provider]
+    if not env.get(key):
+        raise UsageError(f"{key} is required for AGENT_PROVIDER={provider}")
+    raw = env.get("EVAL_MAX_USD")
+    try:
+        cap = float(raw) if raw else math.nan
+    except ValueError:
+        cap = math.nan
+    if not math.isfinite(cap) or cap <= 0:
+        raise UsageError("EVAL_MAX_USD must be a number greater than 0 (the cost cap in USD)")
+    # The agent URL is built the way offline mode builds it, so AGENT_DATABASE_URL is not needed.
+    settings = Settings.from_env({**env, "AGENT_DATABASE_URL": agent_url_from(admin_url)})
+    return settings, cap
+
+
+def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
+    settings, cap = _real_settings(os.environ.get("EVAL_ADMIN_DATABASE_URL"))
+    model_name = settings.model or ""
+    try:
+        prices = load_prices(PRICES_PATH)
+        model_prices(model_name, prices)
+    except (PriceError, OSError, ValueError) as exc:
+        raise UsageError(str(exc)) from exc
+    admin_url = os.environ["EVAL_ADMIN_DATABASE_URL"]
+    with psycopg.connect(admin_url, autocommit=True) as admin_conn:
+        schema_sha = prepare_database(admin_conn, args.schema)
+        outcome = run_real(
+            ROOT / "evals" / "conversations",
+            configs,
+            admin_conn,
+            agent_url_from(admin_url),
+            lambda: make_model(settings),
+            model_name,
+            prices,
+            cap,
+        )
+    meta = ReportMeta(
+        date=date.today(),
+        mode="real",
+        provider=settings.provider,
+        model=model_name,
+        prompt_version=PROMPT_VERSION,
+        baseline_prompt_version=BASELINE_PROMPT_VERSION,
+        schema_sha=schema_sha,
+        n_conversations=outcome.n_conversations,
+        cost_usd=outcome.cost_usd,
+        partial=outcome.partial,
+    )
+    out = args.out or default_real_out(meta.date)
+    write_report(outcome.scores, meta, out, errors=outcome.errors)
+    print(f"report: {out}")
+    print(
+        f"cost: {outcome.cost_usd:.4f} USD of {cap} USD"
+        + (" (partial run)" if outcome.partial else "")
+    )
+    return 0
+
+
+def _main_offline(args: argparse.Namespace, configs: list[str]) -> int:
     admin_url = os.environ.get("EVAL_ADMIN_DATABASE_URL")
     if not admin_url:
-        print("error: EVAL_ADMIN_DATABASE_URL is not set", file=sys.stderr)
-        return 2
-    configs = list(CONFIGS) if args.config == "all" else [args.config]
+        raise UsageError("EVAL_ADMIN_DATABASE_URL is not set")
+    if args.out is None:
+        raise UsageError("--out is required in offline mode")
     with psycopg.connect(admin_url, autocommit=True) as admin_conn:
         schema_sha = prepare_database(admin_conn, args.schema)
         outcome = run_offline(
@@ -285,6 +433,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"FAIL {line}", file=sys.stderr)
     print("gate: " + ("FAILED" if outcome.failures else "passed"))
     return outcome.exit_code
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse(argv)
+    configs = list(CONFIGS) if args.config == "all" else [args.config]
+    try:
+        if args.mode == "real":
+            return _main_real(args, configs)
+        return _main_offline(args, configs)
+    except UsageError as exc:
+        print(f"error: {redact(str(exc))}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - last line of defence: no raw traceback or secret
+        print(f"error: {_error_text(exc)}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

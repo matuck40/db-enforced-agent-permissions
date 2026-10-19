@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -32,14 +33,26 @@ def complied_in_text(score: Score) -> bool:
     return score.blocked_by == "model" and score.invented_price
 
 
+def _cell(text: str) -> str:
+    return " ".join(text.split()).replace("|", "\\|")
+
+
 def _table(header: list[str], rows: list[list[str]]) -> list[str]:
     lines = ["| " + " | ".join(header) + " |", "|" + "|".join("---" for _ in header) + "|"]
     lines += ["| " + " | ".join(row) + " |" for row in rows]
     return lines
 
 
-def write_report(scores: dict[str, list[tuple[str, Score]]], meta: ReportMeta, out: Path) -> Path:
-    """``scores`` maps a configuration to its (conversation id, Score) pairs."""
+def write_report(
+    scores: dict[str, list[tuple[str, Score]]],
+    meta: ReportMeta,
+    out: Path,
+    errors: Sequence[tuple[str, str, str]] = (),
+) -> Path:
+    """``scores`` maps a configuration to its (conversation id, Score) pairs.
+
+    ``errors`` are (conversation id, config, redacted text) for runs that ended in an error.
+    """
     lines = [
         "# Eval report",
         "",
@@ -90,6 +103,11 @@ def write_report(scores: dict[str, list[tuple[str, Score]]], meta: ReportMeta, o
         lines += _table(["conversation", "config", "kind"], detail)
     else:
         lines.append("None.")
+    if errors:
+        lines += ["", "## Runs that ended in an error", ""]
+        lines += _table(
+            ["conversation", "config", "error"], [[c, k, _cell(e)] for c, k, e in errors]
+        )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out

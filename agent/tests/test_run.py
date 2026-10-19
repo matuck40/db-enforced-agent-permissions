@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import evals.run as run_module
 import pytest
+from evals.cost import UsageHandler
 from evals.report import ReportMeta, write_report
 from evals.run import (
     CONFIGS,
@@ -14,6 +16,7 @@ from evals.run import (
     fixture_reset,
     run_conversation,
     run_offline,
+    run_real,
 )
 from evals.scoring import Score
 from test_scoring import conv
@@ -220,3 +223,261 @@ def test_gate_reports_score_mismatch_and_unconsumed_script(agent_url, admin_conn
     assert outcome.exit_code == 1
     assert any("handoff_correct expected" in f for f in outcome.failures)
     assert any("not fully consumed" in f for f in outcome.failures)
+
+
+# --- usage callbacks, real mode, main() -------------------------------------------------
+
+
+USAGE = {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}
+PRICES = {"models": {"m": {"input": 1.0, "cached_input": 0.5, "output": 2.0}}}
+CONV_DIR = ROOT / "evals" / "conversations"
+
+
+def test_callbacks_see_usage_on_graph_and_baseline(factory, admin_conn):
+    from test_scoring import PIZZA
+
+    graph_model = ScriptedChatModel(
+        script=[
+            {"tool_calls": [step("get_menu")], "usage": USAGE},
+            {"content": "menu", "usage": USAGE},
+        ]
+    )
+    handler = UsageHandler()
+    run_conversation(conv(), "tools", graph_model, factory, admin_conn, callbacks=[handler])
+    assert handler.calls == 2  # once per model call, not once per hook
+    assert handler.usage["input_tokens"] == 200
+
+    base_model = ScriptedChatModel(
+        script=[
+            {
+                "json": {
+                    "reply": "ok",
+                    "cart": [{"menu_item_id": PIZZA, "quantity": 1}],
+                    "action": "continue",
+                },
+                "usage": USAGE,
+            }
+        ]
+    )
+    handler = UsageHandler()
+    run_conversation(conv(), "baseline", base_model, factory, admin_conn, callbacks=[handler])
+    assert handler.calls == 1
+    assert handler.usage == {"input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 50}
+
+
+def _loop_model(usage=None, exc=None):
+    """A model that answers "ok" forever (tools config), optionally with usage or an error."""
+
+    class Loop(ScriptedChatModel):
+        def _generate(self, *args, **kwargs):
+            if exc is not None:
+                raise exc
+            return super()._generate(*args, **kwargs)
+
+    return Loop(script=[{"content": "ok", "usage": usage or USAGE}] * 500)
+
+
+def test_cap_stops_and_marks_partial(agent_url, admin_conn):
+    made = []
+
+    def make_model():
+        made.append(_loop_model({"input_tokens": 1_000_000, "output_tokens": 0, "total_tokens": 1}))
+        return made[-1]
+
+    outcome = run_real(CONV_DIR, ["tools"], admin_conn, agent_url, make_model, "m", PRICES, 0.5)
+    assert outcome.partial is True
+    assert len(made) == 1  # no model was even built for the later conversations
+    assert outcome.n_conversations == 1
+    assert len(made[0].calls) == 1  # the in-flight call finished; no further call started
+    assert outcome.cost_usd == pytest.approx(1.0)
+    assert [(c, k) for c, k, _ in outcome.errors] == [(outcome.scores["tools"][0][0], "tools")]
+    assert "cost cap" in outcome.errors[0][2]
+
+
+def test_under_the_cap_runs_everything(agent_url, admin_conn):
+    made = []
+
+    def make_model():
+        made.append(_loop_model())
+        return made[-1]
+
+    outcome = run_real(CONV_DIR, ["tools"], admin_conn, agent_url, make_model, "m", PRICES, 100.0)
+    assert outcome.partial is False
+    assert outcome.n_conversations == len(outcome.scores["tools"]) == 40
+    assert outcome.errors == []
+    calls = sum(len(m.calls) for m in made)
+    assert calls >= 40
+    assert outcome.cost_usd == pytest.approx(calls * (100 * 1.0 + 50 * 2.0) / 1e6)
+
+
+def test_provider_timeout_marks_error(agent_url, admin_conn):
+    made = []
+
+    def make_model():
+        made.append(1)
+        return _loop_model(exc=TimeoutError("read timed out for sk-abcdefghijklmnop12"))
+
+    outcome = run_real(CONV_DIR, ["tools"], admin_conn, agent_url, make_model, "m", PRICES, 100.0)
+    assert outcome.partial is False
+    assert len(made) == 40  # the run went on after every failure
+    assert len(outcome.errors) == 40
+    assert all("sk-abcdefghijklmnop12" not in msg for _, _, msg in outcome.errors)
+    assert all("[REDACTED]" in msg for _, _, msg in outcome.errors)
+
+
+def test_blank_provider_error_still_says_what_failed(factory, admin_conn):
+    result = run_conversation(conv(), "tools", _loop_model(exc=TimeoutError()), factory, admin_conn)
+    assert result.error == "TimeoutError"
+
+
+REAL_ENV = {
+    "AGENT_MODEL": "m",
+    "AGENT_PROVIDER": "openai",
+    "OPENAI_API_KEY": "sk-testtesttesttesttest",
+    "EVAL_MAX_USD": "1.5",
+    "EVAL_ADMIN_DATABASE_URL": "postgresql://postgres@127.0.0.1:1/app",
+}
+ARGS = ["--mode", "real", "--config", "tools", "--schema", "schema.sql"]
+
+
+@pytest.fixture
+def prices_file(tmp_path, monkeypatch):
+    path = tmp_path / "prices.toml"
+    path.write_text("[models.m]\ninput = 1.0\ncached_input = 0.5\noutput = 2.0\n")
+    monkeypatch.setattr(run_module, "PRICES_PATH", path)
+    return path
+
+
+def _env(monkeypatch, **overrides):
+    for key in (
+        "AGENT_MODEL",
+        "AGENT_PROVIDER",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "EVAL_MAX_USD",
+        "EVAL_ADMIN_DATABASE_URL",
+        "AGENT_DATABASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in {**REAL_ENV, **overrides}.items():
+        if value is not None:
+            monkeypatch.setenv(key, value)
+
+
+@pytest.fixture
+def no_model(monkeypatch):
+    """Any attempt to build a model (that is, to reach a provider) fails the test."""
+
+    def boom(*args, **kwargs):
+        raise AssertionError("a model was built")
+
+    monkeypatch.setattr(run_module, "make_model", boom)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"AGENT_MODEL": None},
+        {"OPENAI_API_KEY": None},
+        {"EVAL_MAX_USD": None},
+        {"EVAL_MAX_USD": "0"},
+        {"EVAL_MAX_USD": "-3"},
+        {"EVAL_MAX_USD": "lots"},
+        {"EVAL_MAX_USD": "nan"},
+        {"EVAL_ADMIN_DATABASE_URL": None},
+    ],
+)
+def test_real_mode_missing_settings_exit_2(
+    overrides, monkeypatch, prices_file, no_model, tmp_path, capsys
+):
+    _env(monkeypatch, **overrides)
+    assert run_module.main([*ARGS, "--out", str(tmp_path / "r.md")]) == 2
+    assert capsys.readouterr().err.startswith("error:")
+    assert not (tmp_path / "r.md").exists()
+
+
+def test_real_mode_wants_the_key_of_the_chosen_provider(
+    monkeypatch, prices_file, no_model, tmp_path, capsys
+):
+    _env(monkeypatch, AGENT_PROVIDER="anthropic")  # only OPENAI_API_KEY is set
+    assert run_module.main([*ARGS, "--out", str(tmp_path / "r.md")]) == 2
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().err
+
+
+def test_real_mode_unfilled_price_exits_2_before_anything(monkeypatch, tmp_path, no_model, capsys):
+    _env(monkeypatch)
+    path = tmp_path / "prices.toml"
+    path.write_text('[models.m]\ninput = ""\ncached_input = ""\noutput = ""\n')
+    monkeypatch.setattr(run_module, "PRICES_PATH", path)
+    assert run_module.main([*ARGS, "--out", str(tmp_path / "r.md")]) == 2
+    assert "price" in capsys.readouterr().err
+
+
+def test_real_mode_writes_a_partial_report(monkeypatch, prices_file, admin_url, tmp_path, capsys):
+    _env(monkeypatch, EVAL_ADMIN_DATABASE_URL=admin_url, EVAL_MAX_USD="0.5")
+    big = {"input_tokens": 1_000_000, "output_tokens": 0, "total_tokens": 1}
+    monkeypatch.setattr(run_module, "make_model", lambda settings: _loop_model(big))
+    monkeypatch.setattr(run_module, "prepare_database", lambda conn, schema: "0123456789ab")
+    out = tmp_path / "real.md"
+    code = run_module.main([*ARGS, "--out", str(out)])
+    assert code == 0  # no gate in real mode: the report is the product
+    text = out.read_text()
+    assert "Mode: real" in text
+    assert "Partial run: yes" in text
+    assert "Cost (USD): 1.0000" in text
+    assert "Scripted model" not in text
+    assert "cost cap" in text  # the capped conversation is listed under errors
+
+
+def test_real_mode_default_report_name(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    args = run_module._parse(["--mode", "real", "--config", "all", "--schema", "s.sql"])
+    assert args.out is None
+    assert run_module.default_real_out(date(2026, 10, 18)) == Path(
+        run_module.ROOT / "evals" / "reports" / "2026-10-18-real.md"
+    )
+
+
+def test_main_failure_is_redacted_and_exits_1(monkeypatch, capsys, tmp_path):
+    url = "postgresql://postgres:hunter2pw@127.0.0.1:1/app"
+    monkeypatch.setenv("EVAL_ADMIN_DATABASE_URL", url)
+    code = run_module.main(
+        [
+            "--mode",
+            "offline",
+            "--config",
+            "all",
+            "--schema",
+            "schema.sql",
+            "--out",
+            str(tmp_path / "r.md"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert code == 1
+    assert err.strip()
+    assert "hunter2pw" not in err
+
+
+def test_main_redacts_a_password_inside_the_error_text(monkeypatch, capsys, tmp_path):
+    def boom(url, **kwargs):
+        raise RuntimeError(f"cannot connect to {url}")
+
+    monkeypatch.setattr(run_module.psycopg, "connect", boom)
+    monkeypatch.setenv("EVAL_ADMIN_DATABASE_URL", "postgresql://postgres:hunter2pw@db:5432/app")
+    code = run_module.main(
+        [
+            "--mode",
+            "offline",
+            "--config",
+            "all",
+            "--schema",
+            "schema.sql",
+            "--out",
+            str(tmp_path / "r.md"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "hunter2pw" not in err
+    assert "[REDACTED]" in err

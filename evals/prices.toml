@@ -1,0 +1,19 @@
+# Price per MILLION tokens, in USD, for the model used by `--mode real`.
+#
+# Source: the provider's own pricing page, copied by hand by the repository owner.
+# Nothing in this file is filled in by code and no value here is a guess. The real run
+# refuses to start while the table of the chosen model is missing or has an empty field.
+#
+# Checked on (YYYY-MM-DD):
+# Source URL:
+#
+# One table per model, named exactly like AGENT_MODEL. Copy the table to add a model.
+#   input         price of input tokens that were not served from the prompt cache
+#   cached_input  price of input tokens read from the prompt cache
+#   output        price of output tokens
+# Use a plain number (for example 1.25). An empty string means "not filled in yet".
+
+[models."REPLACE-WITH-THE-AGENT_MODEL-NAME"]
+input = ""
+cached_input = ""
+output = ""
