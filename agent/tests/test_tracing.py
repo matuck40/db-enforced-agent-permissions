@@ -115,7 +115,9 @@ def test_real_run_attaches_one_trace_per_conversation(monkeypatch, admin_conn, a
                 seen_names.append(name)
                 seen_meta.append(metadata or {})
 
-    monkeypatch.setattr(run_module, "make_callbacks", lambda settings, mode: [Spy()])
+    monkeypatch.setattr(
+        run_module, "make_callbacks", lambda settings, mode, trace_seed=None: [Spy()]
+    )
     monkeypatch.setattr(run_module, "flush", lambda handlers: None)
     settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
     prices = {"models": {"m": {"input": 1.0, "cached_input": 0.5, "output": 2.0}}}
@@ -137,3 +139,40 @@ def test_real_run_attaches_one_trace_per_conversation(monkeypatch, admin_conn, a
     assert list(dict.fromkeys(seen_names)) == ids
     assert all(m["langfuse_session_id"].endswith("-tools") for m in seen_meta)
     assert all(m["schema_sha"] == "abc123" and m["prompt_version"] for m in seen_meta)
+
+
+def _fake_langfuse(monkeypatch):
+    """A stand-in langfuse package: deterministic ids from a seed, handler keeps its context."""
+    import hashlib
+    import sys
+    import types
+
+    class Handler(BaseCallbackHandler):
+        def __init__(self, trace_context=None):
+            self.trace_context = trace_context
+
+    class Langfuse:
+        @staticmethod
+        def create_trace_id(*, seed=None):
+            return hashlib.sha256(seed.encode()).hexdigest()[:32]
+
+    top = types.ModuleType("langfuse")
+    top.Langfuse = Langfuse
+    sub = types.ModuleType("langfuse.langchain")
+    sub.CallbackHandler = Handler
+    monkeypatch.setitem(sys.modules, "langfuse", top)
+    monkeypatch.setitem(sys.modules, "langfuse.langchain", sub)
+
+
+def test_trace_id_is_per_conversation(monkeypatch):
+    _fake_langfuse(monkeypatch)
+    settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
+
+    def trace_id(seed):
+        return make_callbacks(settings, "real", trace_seed=seed)[0].trace_context["trace_id"]
+
+    turn_1 = trace_id("2026-10-19-tools-c1")
+    turn_2 = trace_id("2026-10-19-tools-c1")  # a later turn of the same conversation
+    assert turn_1 == turn_2
+    assert trace_id("2026-10-19-tools-c2") != turn_1
+    assert trace_id("2026-10-19-baseline-c1") != turn_1

@@ -284,12 +284,17 @@ def run_real(
     ``make_model_fn`` builds a fresh model per run (the same model for all configurations).
     Customer turns are fixed; the scripts are not used. A failure in one run (a provider
     error, a timeout) is recorded as that run's error and the run goes on.
+
+    With ``settings.langfuse`` and the ``tracing`` extra installed, every conversation in every
+    configuration is one Langfuse trace (all its turns share a trace id), named after the
+    conversation, in session ``<date>-<config>``. Cost is known only after the run, so it stays
+    in the report, not on the trace.
     """
     model_prices(model_name, prices)  # fails before any model exists
     conversations = load_conversations(directory)
     outcome = RealOutcome(scores={config: [] for config in configs})
     handler = UsageHandler(model_name, prices, max_usd)
-    tracers = make_callbacks(settings, "real") if settings is not None else []
+    tracers: list[Any] = []  # every handler built, to flush at the end
     day = (config_date or date.today()).isoformat()
 
     def factory(token: str) -> AgentDB:
@@ -303,17 +308,25 @@ def run_real(
             if handler.over_cap:
                 break
             before = handler.total_usd
+            session = f"{day}-{config}"
+            # One handler per conversation and configuration, pinned to one trace id.
+            handlers = (
+                make_callbacks(settings, "real", trace_seed=f"{session}-{conv.id}")
+                if settings is not None
+                else []
+            )
+            tracers += handlers
             tracing = (
                 {
-                    "callbacks": tracers,
+                    "callbacks": handlers,
                     "run_name": conv.id,
                     "metadata": {
-                        "langfuse_session_id": f"{day}-{config}",
+                        "langfuse_session_id": session,
                         "prompt_version": prompt_version,
                         "schema_sha": schema_sha,
                     },
                 }
-                if tracers
+                if handlers
                 else None
             )
             run = run_conversation(
