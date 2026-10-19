@@ -82,6 +82,7 @@ class UsageHandler(BaseCallbackHandler):
         self.max_usd = max_usd
         self.usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
         self.calls = 0
+        self.calls_without_usage = 0  # results with no usage_metadata: cost under-counted
 
     @property
     def total_usd(self) -> float:
@@ -98,6 +99,7 @@ class UsageHandler(BaseCallbackHandler):
             for generation in generations:
                 meta = getattr(getattr(generation, "message", None), "usage_metadata", None)
                 if not meta:
+                    self.calls_without_usage += 1
                     continue
                 self.calls += 1
                 self.usage["input_tokens"] += meta.get("input_tokens", 0)

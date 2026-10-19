@@ -481,3 +481,74 @@ def test_main_redacts_a_password_inside_the_error_text(monkeypatch, capsys, tmp_
     assert code == 1
     assert "hunter2pw" not in err
     assert "[REDACTED]" in err
+
+
+def _meta(**kw):
+    base = {
+        "date": date(2026, 10, 18),
+        "mode": "real",
+        "provider": "openai",
+        "model": "m",
+        "prompt_version": "p",
+        "baseline_prompt_version": "b",
+        "schema_sha": "0" * 12,
+        "n_conversations": 3,
+        "cost_usd": 0.5,
+        "partial": False,
+    }
+    return ReportMeta(**{**base, **kw})
+
+
+def test_errored_runs_are_left_out_of_every_count(tmp_path: Path):
+    ok = Score(True, True, False, None, None, None)
+    # What scoring gives a run that died before the model tried anything.
+    dead_attack = Score(None, True, False, False, "model", False)
+    dead_order = Score(False, False, False, None, None, None)
+    scores = {
+        "tools": [("a", ok), ("atk", dead_attack), ("ord", dead_order)],
+        "baseline": [("a", ok)],
+    }
+    errors = [("atk", "tools", "TimeoutError"), ("ord", "tools", "cost cap reached")]
+    text = write_report(scores, _meta(), tmp_path / "r.md", errors=errors).read_text()
+    header = next(line for line in text.splitlines() if line.startswith("| config"))
+    cols = [c.strip() for c in header.strip("|").split("|")]
+    assert "errored runs" in cols
+    rows = {
+        r.strip("|").split("|")[0].strip(): [c.strip() for c in r.strip("|").split("|")]
+        for r in text.splitlines()
+        if r.startswith(("| tools |", "| baseline |"))
+    }
+    tools = dict(zip(cols, rows["tools"], strict=True))
+    assert tools["blocked by model"] == "0"
+    assert tools["orders correct"] == "1/1"
+    assert tools["handoffs correct"] == "1/1"
+    assert tools["errored runs"] == "2"
+    assert dict(zip(cols, rows["baseline"], strict=True))["errored runs"] == "0"
+    assert "| atk | tools | TimeoutError |" in text
+
+
+def test_report_header_flags_calls_without_usage(tmp_path: Path):
+    text = write_report({}, _meta(calls_without_usage=3), tmp_path / "a.md").read_text()
+    assert "Calls without usage data: 3 (cost may be under-counted)" in text
+    text = write_report({}, _meta(), tmp_path / "b.md").read_text()
+    assert "under-counted" not in text
+
+
+def test_real_run_reports_calls_without_usage(agent_url, admin_conn):
+    class Silent(ScriptedChatModel):
+        def _generate(self, *args, **kwargs):
+            result = super()._generate(*args, **kwargs)
+            result.generations[0].message.usage_metadata = None
+            return result
+
+    outcome = run_real(
+        CONV_DIR,
+        ["tools"],
+        admin_conn,
+        agent_url,
+        lambda: Silent(script=[{"content": "ok"}] * 50),
+        "m",
+        PRICES,
+        100.0,
+    )
+    assert outcome.calls_without_usage >= 40

@@ -23,6 +23,8 @@ def test_make_model_openai_type(monkeypatch):
     assert m.temperature == 0
     assert m.max_tokens == 800
     assert m.store is False
+    assert m.request_timeout == 60
+    assert m.max_retries == 2
     assert m.reasoning_effort is None
 
 
@@ -38,6 +40,8 @@ def test_make_model_anthropic_type(monkeypatch):
     assert isinstance(m, ChatAnthropic)
     assert m.temperature == 0
     assert m.max_tokens == 800
+    assert m.default_request_timeout == 60
+    assert m.max_retries == 2
 
 
 def test_make_model_requires_model():

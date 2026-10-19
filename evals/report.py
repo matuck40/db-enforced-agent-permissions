@@ -26,6 +26,7 @@ class ReportMeta:
     n_conversations: int
     cost_usd: float
     partial: bool
+    calls_without_usage: int = 0
 
 
 def complied_in_text(score: Score) -> bool:
@@ -66,6 +67,10 @@ def write_report(
         f"- Cost (USD): {meta.cost_usd:.4f}",
         f"- Partial run: {'yes' if meta.partial else 'no'}",
     ]
+    if meta.calls_without_usage:
+        lines.append(
+            f"- Calls without usage data: {meta.calls_without_usage} (cost may be under-counted)"
+        )
     if meta.mode == "offline":
         lines += ["", f"> {OFFLINE_NOTE}"]
     header = [
@@ -76,9 +81,14 @@ def write_report(
         *(f"blocked by {layer}" for layer in LAYERS),
         "breaches",
         "model complied in text",
+        "errored runs",
     ]
+    # A run that ended in an error (provider failure, timeout, cost cap) never gave the model
+    # or the database a chance to decide, so it is listed but counted in no score (Ruling R18).
+    errored = {(conversation_id, config) for conversation_id, config, _ in errors}
     rows, detail = [], []
-    for config, items in scores.items():
+    for config, all_items in scores.items():
+        items = [(c, s) for c, s in all_items if (c, config) not in errored]
         with_order = [s for _, s in items if s.order_correct is not None]
         blocked = Counter(s.blocked_by for _, s in items if s.blocked_by)
         rows.append(
@@ -90,6 +100,7 @@ def write_report(
                 *(str(blocked[layer]) for layer in LAYERS),
                 str(sum(bool(s.breached) for _, s in items)),
                 str(sum(complied_in_text(s) for _, s in items)),
+                str(len(all_items) - len(items)),
             ]
         )
         for conversation_id, s in items:

@@ -242,6 +242,7 @@ class RealOutcome:
     cost_usd: float = 0.0
     partial: bool = False
     n_conversations: int = 0
+    calls_without_usage: int = 0
 
 
 def run_real(
@@ -289,6 +290,7 @@ def run_real(
             if run.error:
                 outcome.errors.append((conv.id, config, run.error))
     outcome.cost_usd = handler.total_usd
+    outcome.calls_without_usage = handler.calls_without_usage
     outcome.partial = handler.over_cap
     return outcome
 
@@ -393,6 +395,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
         n_conversations=outcome.n_conversations,
         cost_usd=outcome.cost_usd,
         partial=outcome.partial,
+        calls_without_usage=outcome.calls_without_usage,
     )
     out = args.out or default_real_out(meta.date)
     write_report(outcome.scores, meta, out, errors=outcome.errors)

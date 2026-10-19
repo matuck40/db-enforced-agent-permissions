@@ -73,3 +73,23 @@ def test_handler_raises_once_over_the_cap():
     with pytest.raises(CostCapReached):
         model.invoke([HumanMessage("x")])
     assert handler.total_usd == pytest.approx(1.0)
+
+
+def test_handler_counts_calls_without_usage():
+    model = ScriptedChatModel(script=[{"content": "a", "usage": {"input_tokens": 1, "output_tokens": 0, "total_tokens": 1}}])
+
+    class NoUsage(ScriptedChatModel):
+        def _generate(self, *args, **kwargs):
+            result = super()._generate(*args, **kwargs)
+            result.generations[0].message.usage_metadata = None
+            return result
+
+    silent = NoUsage(script=[{"content": "a"}, {"content": "b"}])
+    handler = UsageHandler()
+    silent.callbacks = [handler]
+    silent.invoke([HumanMessage("x")])
+    silent.invoke([HumanMessage("x")])
+    assert (handler.calls, handler.calls_without_usage) == (0, 2)
+    model.callbacks = [handler]
+    model.invoke([HumanMessage("x")])
+    assert (handler.calls, handler.calls_without_usage) == (1, 2)
