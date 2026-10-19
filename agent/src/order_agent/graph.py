@@ -16,6 +16,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
@@ -29,6 +30,11 @@ from order_agent.validate import validate_tool_calls
 
 # Pass with a thread id: {**RUN_CONFIG, "configurable": {"thread_id": ...}}
 RUN_CONFIG: dict[str, Any] = {"recursion_limit": 25}
+
+
+# Event lives in the state; register it so the checkpointer deserializes it without a warning
+# (and keeps working when langgraph blocks unregistered types).
+_SERDE = JsonPlusSerializer(allowed_msgpack_modules=[("order_agent.events", "Event")])
 
 
 def _last_ai(state: OrderState) -> AIMessage:
@@ -82,4 +88,4 @@ def build_graph(model, db: AgentDB, guarded: bool = True) -> CompiledStateGraph:
     graph.add_conditional_edges("model", after_model, ["validate", END])
     graph.add_conditional_edges("tools", after_tools, ["human", "model"])
     graph.add_edge("human", END)
-    return graph.compile(checkpointer=MemorySaver())
+    return graph.compile(checkpointer=MemorySaver(serde=_SERDE))

@@ -212,3 +212,27 @@ def test_resumed_handoff_clears_reason(db):
     graph.invoke(start(), cfg)
     state = graph.invoke(Command(resume="handled"), cfg)
     assert state["handoff_reason"] is None
+
+
+def test_checkpointer_serializes_events_without_warning(db, caplog):
+    """Event objects in the state round-trip through MemorySaver without a serde warning."""
+    from langgraph.checkpoint.serde import jsonplus
+
+    from order_agent.events import Event
+
+    # The library warns once per type and process; forget earlier warnings to see this run's.
+    jsonplus._warned_unregistered_types.clear()
+    model = ScriptedChatModel(
+        script=[
+            {"tool_calls": [step("add_to_cart", menu_item_id=OFF_MENU, quantity=1)]},
+            {"content": "sorry"},
+        ]
+    )
+    graph = build_graph(model, db)
+    cfg = config("serde-warning")
+    with caplog.at_level("WARNING"):
+        graph.invoke(start("pizza"), cfg)
+        values = graph.get_state(cfg).values
+    assert values["events"], "the refused call should have left an audit event"
+    assert all(isinstance(e, Event) for e in values["events"])
+    assert [r.getMessage() for r in caplog.records if "checkpoint" in r.name] == []

@@ -76,3 +76,20 @@ def test_usage_metadata_default_and_configured():
         "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
     }
     assert model.invoke([HumanMessage("x")]).usage_metadata["total_tokens"] == 5
+
+
+def test_structured_output_fires_callbacks_with_usage():
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    seen = []
+
+    class Spy(BaseCallbackHandler):
+        def on_llm_end(self, response, **kwargs):
+            seen.append(response.generations[0][0].message.usage_metadata)
+
+    usage = {"input_tokens": 7, "output_tokens": 3, "total_tokens": 10}
+    model = ScriptedChatModel(script=[{"json": {"k": 1}, "usage": usage}])
+    model.callbacks = [Spy()]
+    out = model.with_structured_output({}, strict=True).invoke([HumanMessage("q")])
+    assert out == {"k": 1}
+    assert seen == [usage]

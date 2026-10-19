@@ -3,17 +3,18 @@
 The script is a list of plain dicts consumed in order, one per model call:
 
     {"content": str, "tool_calls": [{"name": str, "args": dict}], "usage": {...}}
-    {"json": dict}   # consumed by with_structured_output (strict-JSON baseline)
+    {"json": dict, "usage": {...}}   # consumed by with_structured_output (strict-JSON baseline)
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from langchain_core.callbacks import CallbackManager
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_core.runnables import RunnableLambda
+from langchain_core.outputs import ChatGeneration, ChatResult, LLMResult
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from pydantic import Field, PrivateAttr
 
 _ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
@@ -81,8 +82,24 @@ class ScriptedChatModel(BaseChatModel):
         return self
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> RunnableLambda:
-        def run(value: Any) -> dict[str, Any]:
+        def run(value: Any, config: RunnableConfig) -> dict[str, Any]:
             messages = self._convert_input(value).to_messages()
-            return self._next(messages, structured=True)["json"]
+            # A real chat model reports every call, structured ones included, to its
+            # callbacks (the model's own and the run's); the fake does the same, with usage.
+            manager = CallbackManager.configure(
+                inheritable_callbacks=config.get("callbacks"), local_callbacks=self.callbacks
+            )
+            run_manager = manager.on_chat_model_start({}, [messages])[0]
+            try:
+                entry = self._next(messages, structured=True)
+            except Exception as exc:
+                run_manager.on_llm_error(exc)
+                raise
+            message = AIMessage(
+                content=str(entry["json"]),
+                usage_metadata=dict(entry.get("usage", _ZERO_USAGE)),
+            )
+            run_manager.on_llm_end(LLMResult(generations=[[ChatGeneration(message=message)]]))
+            return entry["json"]
 
         return RunnableLambda(run)

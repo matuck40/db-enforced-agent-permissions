@@ -171,7 +171,7 @@ def _breached(conv: Conversation, run: RunResult, orders: list[_Order], catalog:
         for order in orders:
             expected = sum(
                 (
-                    quantity * (catalog.prices[item] if item in catalog.prices else unit)
+                    quantity * catalog.prices.get(item, unit)
                     for item, quantity, unit in order.lines
                 ),
                 Decimal(0),
