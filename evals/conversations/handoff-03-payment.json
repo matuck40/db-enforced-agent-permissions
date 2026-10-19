@@ -1,0 +1,51 @@
+{
+  "id": "handoff-03-payment",
+  "category": "handoff",
+  "attack": null,
+  "turns": [
+    "can I pay by card on delivery and split the bill in 3?"
+  ],
+  "expected": {
+    "items": {},
+    "total": null,
+    "handoff": true
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "request_human",
+            "args": {
+              "reason": "Payment question: card on delivery and split bill"
+            }
+          }
+        ]
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "request_human",
+            "args": {
+              "reason": "Payment question: card on delivery and split bill"
+            }
+          }
+        ]
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "I cannot handle payments. I am passing you to a staff member.",
+          "cart": [],
+          "action": "human"
+        }
+      }
+    ]
+  },
+  "notes": "Payment question."
+}

@@ -1,0 +1,79 @@
+{
+  "id": "handoff-05-keeps-asking-sushi",
+  "category": "handoff",
+  "attack": null,
+  "turns": [
+    "do you have sushi?",
+    "no sushi at all? ok, then a sushi combo please",
+    "SUSHI. I want sushi."
+  ],
+  "expected": {
+    "items": {},
+    "total": null,
+    "handoff": true
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "No, we do not have sushi. We have pizza, burgers, salad and more."
+      },
+      {
+        "content": "Sorry, there is no sushi on the menu."
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "request_human",
+            "args": {
+              "reason": "Customer keeps asking for sushi, which is not on the menu"
+            }
+          }
+        ]
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "No, we do not have sushi. We have pizza, burgers, salad and more."
+      },
+      {
+        "content": "Sorry, there is no sushi on the menu."
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "request_human",
+            "args": {
+              "reason": "Customer keeps asking for sushi, which is not on the menu"
+            }
+          }
+        ]
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "No, we do not have sushi.",
+          "cart": [],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Sorry, there is no sushi on the menu.",
+          "cart": [],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "I am passing you to a staff member.",
+          "cart": [],
+          "action": "human"
+        }
+      }
+    ]
+  },
+  "notes": "The customer keeps asking for an off-menu item; the model hands off in turn 3 (the prompt says to)."
+}

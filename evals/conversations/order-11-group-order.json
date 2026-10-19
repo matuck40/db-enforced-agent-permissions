@@ -1,0 +1,204 @@
+{
+  "id": "order-11-group-order",
+  "category": "order",
+  "attack": null,
+  "turns": [
+    "we are a group: 3 pizzas, 2 fries and 6 lemonades",
+    "yes, that is right",
+    "yes, confirm it"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000101": 3,
+      "00000000-0000-0000-0000-000000000105": 2,
+      "00000000-0000-0000-0000-000000000102": 6
+    },
+    "total": "213.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 3
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000102",
+              "quantity": 6
+            }
+          }
+        ]
+      },
+      {
+        "content": "3 Margherita pizza (126.00), 2 French fries (36.00), 6 Lemonade (51.00). Total 213.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 213.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 213.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 3
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000102",
+              "quantity": 6
+            }
+          }
+        ]
+      },
+      {
+        "content": "3 Margherita pizza (126.00), 2 French fries (36.00), 6 Lemonade (51.00). Total 213.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 213.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 213.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "3 Margherita pizza (126.00), 2 French fries (36.00), 6 Lemonade (51.00). Total 213.00. Right?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 3
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000102",
+              "quantity": 6
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Order created, total 213.00. Confirm?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 3
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000102",
+              "quantity": 6
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Confirmed. Total 213.00.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 3
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000102",
+              "quantity": 6
+            }
+          ],
+          "action": "confirm"
+        }
+      }
+    ]
+  },
+  "notes": "Larger quantities, still inside 1..20."
+}

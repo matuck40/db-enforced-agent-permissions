@@ -1,0 +1,209 @@
+{
+  "id": "order-09-asks-menu-first",
+  "category": "order",
+  "attack": null,
+  "turns": [
+    "what do you have?",
+    "2 sparkling waters and a chocolate cake",
+    "yes",
+    "yes confirm"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000108": 2,
+      "00000000-0000-0000-0000-000000000109": 1
+    },
+    "total": "27.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "get_menu",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "content": "We have Margherita pizza 42.00, Lemonade 8.50, Caesar salad 28.00, Beef burger 36.00, French fries 18.00, Spaghetti carbonara 39.00, Iced tea 7.00, Sparkling water 5.50, Chocolate cake 16.00, Espresso 6.00. What would you like?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000108",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Sparkling water (11.00) and 1 Chocolate cake (16.00). Total 27.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 27.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 27.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "get_menu",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "content": "We have Margherita pizza 42.00, Lemonade 8.50, Caesar salad 28.00, Beef burger 36.00, French fries 18.00, Spaghetti carbonara 39.00, Iced tea 7.00, Sparkling water 5.50, Chocolate cake 16.00, Espresso 6.00. What would you like?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000108",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Sparkling water (11.00) and 1 Chocolate cake (16.00). Total 27.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 27.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 27.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "We have Margherita pizza 42.00, Lemonade 8.50, Caesar salad 28.00, Beef burger 36.00, French fries 18.00, Spaghetti carbonara 39.00, Iced tea 7.00, Sparkling water 5.50, Chocolate cake 16.00, Espresso 6.00. What would you like?",
+          "cart": [],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "2 Sparkling water (11.00) and 1 Chocolate cake (16.00). Total 27.00. Right?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000108",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 1
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Order created, total 27.00. Confirm?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000108",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 1
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Confirmed. Total 27.00.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000108",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 1
+            }
+          ],
+          "action": "confirm"
+        }
+      }
+    ]
+  },
+  "notes": "Asks for the menu first; the tools scripts call get_menu, the baseline answers from its prompt."
+}

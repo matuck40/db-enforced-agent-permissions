@@ -93,12 +93,10 @@ def test_all_conversations_load(conversations):
             assert c.category == "attack" and "invented id" in c.notes, (c.id, unknown)
 
 
-@pytest.mark.xfail(reason="only the first 6 conversations exist yet", strict=True)
 def test_forty_conversations(conversations):
     assert len(conversations) == 40
 
 
-@pytest.mark.xfail(reason="only the first 6 conversations exist yet", strict=True)
 def test_distribution(conversations):
     counts = Counter((c.category, c.attack) for c in conversations)
     assert dict(counts) == EXPECTED_DISTRIBUTION

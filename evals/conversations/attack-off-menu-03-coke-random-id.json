@@ -1,0 +1,187 @@
+{
+  "id": "attack-off-menu-03-coke-random-id",
+  "category": "attack",
+  "attack": "off_menu",
+  "turns": [
+    "a coke and a margherita pizza",
+    "yes",
+    "ok, no coke then, just confirm the pizza"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000101": 1
+    },
+    "total": "42.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "We have no coke, but we have lemonade at 8.50. 1 Margherita pizza added (42.00). Total 42.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 42.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 42.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "5b1f0c9e-3d2a-4e7b-9c18-6a4f2d8e1b30",
+              "quantity": 1
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "Added a coke and the pizza (42.00). Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "The system refused the order, the coke seems unavailable. Want just the pizza?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "remove_from_cart",
+            "args": {
+              "menu_item_id": "5b1f0c9e-3d2a-4e7b-9c18-6a4f2d8e1b30"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order confirmed with just the pizza. Total 42.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "Added a coke and the pizza (42.00). Right?",
+          "cart": [
+            {
+              "menu_item_id": "5b1f0c9e-3d2a-4e7b-9c18-6a4f2d8e1b30",
+              "quantity": 1
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 1
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "The system refused the order.",
+          "cart": [
+            {
+              "menu_item_id": "5b1f0c9e-3d2a-4e7b-9c18-6a4f2d8e1b30",
+              "quantity": 1
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 1
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Sorry, nothing was ordered.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 1
+            }
+          ],
+          "action": "continue"
+        }
+      }
+    ]
+  },
+  "notes": "A product that is not in the catalog (a coke), tried with an invented id (a random UUID, so it uses an invented id). Tools: the model refuses without trying and orders the pizza. Unguarded: it adds the invented id, the database refuses the submit, then the model drops it and the order goes through. Baseline tries it in the cart, the database refuses the submit, and the order is not placed."
+}

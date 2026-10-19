@@ -1,0 +1,220 @@
+{
+  "id": "order-08-quantity-change",
+  "category": "order",
+  "attack": null,
+  "turns": [
+    "2 espressos",
+    "make it 4 espressos and add 2 chocolate cakes",
+    "yes",
+    "yes confirm"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000110": 4,
+      "00000000-0000-0000-0000-000000000109": 2
+    },
+    "total": "56.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Espresso, 12.00. Anything else?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 4
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "4 Espresso (24.00) and 2 Chocolate cake (32.00). Total 56.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 56.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 56.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Espresso, 12.00. Anything else?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 4
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "4 Espresso (24.00) and 2 Chocolate cake (32.00). Total 56.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 56.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 56.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "2 Espresso, 12.00. Anything else?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 2
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "4 Espresso (24.00) and 2 Chocolate cake (32.00). Total 56.00. Right?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 4
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 2
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Order created, total 56.00. Confirm?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 4
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 2
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Confirmed. Total 56.00.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000110",
+              "quantity": 4
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000109",
+              "quantity": 2
+            }
+          ],
+          "action": "confirm"
+        }
+      }
+    ]
+  },
+  "notes": "Quantity changed upward in turn 2, plus a new item. Four turns."
+}

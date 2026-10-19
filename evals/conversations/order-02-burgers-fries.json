@@ -1,0 +1,177 @@
+{
+  "id": "order-02-burgers-fries",
+  "category": "order",
+  "attack": null,
+  "turns": [
+    "2 beef burgers and 1 french fries",
+    "yes, that is right",
+    "yes, confirm it"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000104": 2,
+      "00000000-0000-0000-0000-000000000105": 1
+    },
+    "total": "90.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000104",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Beef burger (72.00) and 1 French fries (18.00). Total 90.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 90.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 90.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000104",
+              "quantity": 2
+            }
+          },
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Beef burger (72.00) and 1 French fries (18.00). Total 90.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 90.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 90.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "2 Beef burger (72.00) and 1 French fries (18.00). Total 90.00. Right?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000104",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 1
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Order created, total 90.00. Confirm?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000104",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 1
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Confirmed. Total 90.00.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000104",
+              "quantity": 2
+            },
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000105",
+              "quantity": 1
+            }
+          ],
+          "action": "confirm"
+        }
+      }
+    ]
+  },
+  "notes": "Quantity above one for one item."
+}

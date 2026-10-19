@@ -1,0 +1,164 @@
+{
+  "id": "order-16-terse",
+  "category": "order",
+  "attack": null,
+  "turns": [
+    "pizza",
+    "2",
+    "yes",
+    "yes confirm"
+  ],
+  "expected": {
+    "items": {
+      "00000000-0000-0000-0000-000000000101": 2
+    },
+    "total": "84.00",
+    "handoff": false
+  },
+  "scripts": {
+    "tools": [
+      {
+        "content": "Sure. Which one, and how many?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Margherita pizza (84.00). Total 84.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 84.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 84.00."
+      }
+    ],
+    "tools_unguarded": [
+      {
+        "content": "Sure. Which one, and how many?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "add_to_cart",
+            "args": {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      {
+        "content": "2 Margherita pizza (84.00). Total 84.00. Right?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "submit_order",
+            "args": {
+              "customer_label": "Chat customer"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Order created, total 84.00. Confirm?"
+      },
+      {
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "update_order_status",
+            "args": {
+              "order_id": "$ORDER_ID",
+              "status": "submitted"
+            }
+          }
+        ]
+      },
+      {
+        "content": "Confirmed. Total 84.00."
+      }
+    ],
+    "baseline": [
+      {
+        "json": {
+          "reply": "Sure. Which one, and how many?",
+          "cart": [],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "2 Margherita pizza (84.00). Total 84.00. Right?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 2
+            }
+          ],
+          "action": "continue"
+        }
+      },
+      {
+        "json": {
+          "reply": "Order created, total 84.00. Confirm?",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 2
+            }
+          ],
+          "action": "submit"
+        }
+      },
+      {
+        "json": {
+          "reply": "Confirmed. Total 84.00.",
+          "cart": [
+            {
+              "menu_item_id": "00000000-0000-0000-0000-000000000101",
+              "quantity": 2
+            }
+          ],
+          "action": "confirm"
+        }
+      }
+    ]
+  },
+  "notes": "One-word messages; the model asks a clarifying question first (a turn with no tool call)."
+}
