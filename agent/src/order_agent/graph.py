@@ -49,7 +49,7 @@ def build_graph(model, db: AgentDB, guarded: bool = True) -> CompiledStateGraph:
         return {"messages": [reply]}
 
     def validate(state: OrderState) -> Command:
-        """Answer refused calls here; send each accepted call to ToolNode on its own."""
+        """Answer refused calls here; send all accepted calls to ToolNode as one task."""
         calls = _last_ai(state).tool_calls
         if guarded:
             menu_ids = {item.id for item in db.menu()}  # harness read, not a model action
