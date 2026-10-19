@@ -18,6 +18,9 @@
 --     order that does not exist). A null hash never matches.
 -- Other stations and every function signature are unchanged.
 --
+-- It expects no pre-existing `extensions` schema: if one exists, the migration
+-- fails instead of reusing a schema it does not own.
+--
 -- Existing chat orders keep a null conversation_hash and are therefore
 -- unreachable by the agent from now on, on purpose: nothing records which
 -- conversation created them, and guessing would reopen the gap. A human
@@ -122,14 +125,19 @@ declare
   allowed app.station[];
 begin
   if st is null then raise exception 'unknown station' using errcode = '42501'; end if;
-  select * into o from app.orders where id = p_order for update;
   -- An order the caller cannot read does not exist for the caller. For the
   -- agent that is every order but the chat orders of this conversation; a
-  -- null hash on either side never matches.
-  if not found
-     or (st = 'ordering_agent'
-         and (o.channel <> 'chat'
-              or not coalesce(o.conversation_hash = app.current_conversation_hash(), false))) then
+  -- null hash on either side never matches. The scope is in the WHERE, so the
+  -- agent never locks (or waits on) a row it cannot address.
+  if st = 'ordering_agent' then
+    select * into o from app.orders
+    where id = p_order and channel = 'chat'
+      and conversation_hash = app.current_conversation_hash()
+    for update;
+  else
+    select * into o from app.orders where id = p_order for update;
+  end if;
+  if not found then
     raise exception 'order not found' using errcode = 'P0002';
   end if;
 

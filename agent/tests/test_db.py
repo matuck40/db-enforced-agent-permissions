@@ -121,3 +121,19 @@ def test_short_token_cannot_create_an_order(agent_url):
         db.create_order("Ana", [{"menu_item_id": PIZZA}])
     assert exc.value.sqlstate == "42501"
     assert "too-short" not in str(exc.value)
+
+
+def test_agent_never_locks_an_order_it_cannot_address(db, admin_url, admin_conn):
+    # Another session holds the row lock on ...0202. If advance_order locked the row
+    # before checking the conversation scope, the agent would wait on it (lock timeout,
+    # 55P03); it must answer P0002 without touching the lock.
+    import psycopg
+
+    db._conn.execute("set lock_timeout = '500ms'")
+    db._conn.commit()
+    with psycopg.connect(admin_url) as holder:
+        holder.execute("select 1 from app.orders where id = %s for update", (FOREIGN_DRAFT,))
+        with pytest.raises(DbRefusal) as exc:
+            db.update_order_status(FOREIGN_DRAFT, "submitted")
+        holder.rollback()
+    assert exc.value.sqlstate == "P0002"

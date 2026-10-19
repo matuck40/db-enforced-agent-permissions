@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Starts a fresh Postgres, loads the schema (schema.sql, then every file in
-# migrations/ in name order), and runs every role test as that role. Needs only Docker. Exit code is 0 only if every file passed.
+# migrations/ in name order), and runs every role test as that role. Needs
+# only Docker. Exit code is 0 only if every file passed.
 #
 #   ./run-tests.sh              run and tear down
 #   KEEP_DB=1 ./run-tests.sh    leave the database up afterwards (port 55432)
