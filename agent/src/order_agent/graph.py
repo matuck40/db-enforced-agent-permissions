@@ -56,15 +56,16 @@ def build_graph(model, db: AgentDB, guarded: bool = True) -> CompiledStateGraph:
             accepted, refusals, events = validate_tool_calls(calls, state, menu_ids)
         else:
             accepted, refusals, events = list(calls), [], []
-        sends = [
-            Send("tools", {"__type": "tool_call_with_context", "tool_call": c, "state": state})
-            for c in accepted
-        ]
-        return Command(update={"messages": refusals, "events": events}, goto=sends or "model")
+        # One task for all accepted calls, so the next route sees every write (a
+        # handoff must end the turn). The list payload makes ToolNode read the current
+        # state from the channels for InjectedState.
+        goto = [Send("tools", accepted)] if accepted else "model"
+        return Command(update={"messages": refusals, "events": events}, goto=goto)
 
     def human(state: OrderState) -> dict:
         interrupt({"reason": state["handoff_reason"]})
-        return {}
+        # Resumed: the handoff is done; later tool rounds must not route here again.
+        return {"handoff_reason": None}
 
     def after_model(state: OrderState) -> str:
         return "validate" if _last_ai(state).tool_calls else END

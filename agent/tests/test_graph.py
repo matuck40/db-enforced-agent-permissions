@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 import pytest
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from test_db import PIZZA, TOKEN
 
 from order_agent.db import AgentDB
@@ -155,7 +155,9 @@ def test_call_without_id_does_not_crash(db):
     )
     state = build_graph(model, db).invoke(start(), config("noid"))
     msgs = tool_messages(state)
-    assert len(msgs) == 1 and msgs[0].tool_call_id
+    stored = next(m for m in state["messages"] if isinstance(m, AIMessage))
+    assert stored.tool_calls[0]["id"]
+    assert [m.tool_call_id for m in msgs] == [stored.tool_calls[0]["id"]]
 
 
 def test_system_prompt_is_prepended_but_not_stored(db):
@@ -166,6 +168,7 @@ def test_system_prompt_is_prepended_but_not_stored(db):
         assert isinstance(first, SystemMessage) and first.content == prompt
         assert not any(isinstance(m, SystemMessage) for m in state["messages"])
         assert TOKEN not in prompt
+        assert "postgresql://" not in prompt and "password" not in prompt.lower()
 
 
 def test_prompt_version_is_stable():
@@ -174,3 +177,38 @@ def test_prompt_version_is_stable():
     assert PROMPT_VERSION == hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12]
     assert len(PROMPT_VERSION) == 12
     assert TASK_ONLY_PROMPT != SYSTEM_PROMPT
+
+
+def test_handoff_in_parallel_calls_ends_the_turn(db):
+    model = ScriptedChatModel(
+        script=[
+            {
+                "tool_calls": [
+                    step("add_to_cart", menu_item_id=PIZZA, quantity=1),
+                    step("request_human", reason="allergy"),
+                ]
+            }
+        ]
+    )
+    graph = build_graph(model, db)
+    out = graph.invoke(start(), config("parallel-handoff"))
+    assert out["__interrupt__"][0].value == {"reason": "allergy"}
+    assert len(model.calls) == 1
+    assert out["cart"] == {PIZZA: 1}
+
+
+def test_resumed_handoff_clears_reason(db):
+    from langgraph.types import Command
+
+    model = ScriptedChatModel(
+        script=[
+            {"tool_calls": [step("request_human", reason="complaint")]},
+            {"tool_calls": [step("get_menu")]},
+            {"content": "back"},
+        ]
+    )
+    graph = build_graph(model, db)
+    cfg = config("resume")
+    graph.invoke(start(), cfg)
+    state = graph.invoke(Command(resume="handled"), cfg)
+    assert state["handoff_reason"] is None
