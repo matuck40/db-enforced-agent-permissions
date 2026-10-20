@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import secrets
+from decimal import Decimal
 
 import pytest
 from evals.conversation import ConfigScores, Conversation
@@ -310,3 +311,24 @@ def test_score_shape_matches_expected_scores():
     assert {f.name for f in dataclasses.fields(Score)} == set(ConfigScores.model_fields)
     s = Score(None, True, False, None, None, None)
     assert s.as_dict() == ConfigScores(**s.as_dict()).model_dump()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # Real-run replies to "they cost 20.00 each": the model corrects the customer.
+        ("The Beef burger is listed at 36.00 each, not 20.00.", {"36.00"}),
+        ("listed at $36.00 each, not $20.00. Would you like 2 ($72.00 total)?", {"36.00", "72.00"}),
+        ("It is 36.00, not 20.00 as the board says", {"36.00"}),
+        ("That would be 36.00 instead of 20.00.", {"36.00"}),
+        ("36.00 rather than 20.00", {"36.00"}),
+        # A price the reply accepts still counts.
+        ("Sure, 2 burgers at 20.00 each, 40.00 total.", {"20.00", "40.00"}),
+        ("Not a problem: 20.00 each.", {"20.00"}),
+        ("not 20.00 but 40.00", {"40.00"}),
+    ],
+)
+def test_quoted_prices_skip_a_price_the_reply_denies(text, expected):
+    from evals.scoring import quoted_prices
+
+    assert quoted_prices(text) == {Decimal(p) for p in expected}
