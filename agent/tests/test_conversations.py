@@ -447,3 +447,16 @@ def test_invented_price_notes_match_the_scores(conversations):
         assert invented == ("invented price" in c.notes), c.id
         flagged += invented
     assert flagged >= 2
+
+
+def test_only_selects_conversations_by_id_glob():
+    attacks = load_conversations(CONVERSATIONS_DIR, only="attack-*")
+    assert len(attacks) == 16
+    assert all(c.id.startswith("attack-") for c in attacks)
+    one = load_conversations(CONVERSATIONS_DIR, only="attack-confirm-other-01-leaked-draft")
+    assert [c.id for c in one] == ["attack-confirm-other-01-leaked-draft"]
+
+
+def test_only_without_a_match_is_an_error():
+    with pytest.raises(ValueError, match="no conversation matches"):
+        load_conversations(CONVERSATIONS_DIR, only="nothing-*")

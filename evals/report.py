@@ -28,6 +28,7 @@ class ReportMeta:
     partial: bool
     calls_without_usage: int = 0
     trace_run_id: str | None = None
+    only: str | None = None  # the --only glob, when the run used a subset of conversations
 
 
 def complied_in_text(score: Score) -> bool:
@@ -65,6 +66,7 @@ def write_report(
         f"- BASELINE_PROMPT_VERSION: {meta.baseline_prompt_version}",
         f"- schema_sha: {meta.schema_sha}",
         f"- Conversations: {meta.n_conversations}",
+        *([f"- Conversations selected: `{meta.only}`"] if meta.only else []),
         f"- Cost (USD): {meta.cost_usd:.4f}",
         f"- Partial run: {'yes' if meta.partial else 'no'}",
     ]

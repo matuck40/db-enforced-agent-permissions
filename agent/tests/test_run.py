@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -357,6 +358,11 @@ def _env(monkeypatch, **overrides):
         "EVAL_MAX_USD",
         "EVAL_ADMIN_DATABASE_URL",
         "AGENT_DATABASE_URL",
+        # The developer's own tracing keys must not switch tracing on inside a test.
+        "LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY",
+        "LANGFUSE_HOST",
+        "LANGFUSE_BASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
     for key, value in {**REAL_ENV, **overrides}.items():
@@ -583,3 +589,16 @@ def test_real_run_reports_calls_without_usage(agent_url, admin_conn):
         100.0,
     )
     assert outcome.calls_without_usage >= 40
+
+
+def test_report_names_the_conversation_filter(tmp_path: Path):
+    meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 16, 0.5, False)
+    assert "Conversations selected" not in write_report(_scores(), meta, tmp_path / "a.md").read_text()
+    meta = replace(meta, only="attack-*")
+    text = write_report(_scores(), meta, tmp_path / "b.md").read_text()
+    assert "- Conversations selected: `attack-*`" in text
+
+
+def test_parse_accepts_only():
+    assert run_module._parse([*ARGS, "--only", "attack-*"]).only == "attack-*"
+    assert run_module._parse(ARGS).only is None

@@ -236,9 +236,9 @@ class OfflineOutcome:
 
 
 def run_offline(
-    directory: Path, configs: Sequence[str], admin_conn, agent_url: str
+    directory: Path, configs: Sequence[str], admin_conn, agent_url: str, only: str | None = None
 ) -> OfflineOutcome:
-    conversations = load_conversations(directory)
+    conversations = load_conversations(directory, only)
     outcome = OfflineOutcome(n_conversations=len(conversations))
 
     def factory(token: str) -> AgentDB:
@@ -281,6 +281,7 @@ def run_real(
     prompt_version: str = PROMPT_VERSION,
     schema_sha: str = "",
     run_nonce: str | None = None,
+    only: str | None = None,
 ) -> RealOutcome:
     """Run every conversation in every configuration with a real model, under a cost cap.
 
@@ -294,7 +295,7 @@ def run_real(
     in the report, not on the trace.
     """
     model_prices(model_name, prices)  # fails before any model exists
-    conversations = load_conversations(directory)
+    conversations = load_conversations(directory, only)
     outcome = RealOutcome(scores={config: [] for config in configs})
     handler = UsageHandler(model_name, prices, max_usd)
     tracers: list[Any] = []  # every handler built, to flush at the end
@@ -401,6 +402,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         help="schema file to load; repeat it to load several, in the order given",
     )
     p.add_argument("--out", type=Path, help="report path (default for real: evals/reports/)")
+    p.add_argument("--only", help="glob on conversation ids to run a subset (e.g. 'attack-*')")
     return p.parse_args(argv)
 
 
@@ -459,6 +461,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
             cap,
             settings=settings,
             schema_sha=schema_sha,
+            only=args.only,
         )
     meta = ReportMeta(
         date=date.today(),
@@ -473,6 +476,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
         partial=outcome.partial,
         calls_without_usage=outcome.calls_without_usage,
         trace_run_id=outcome.trace_run_id,
+        only=args.only,
     )
     out = args.out or default_real_out(meta.date)
     write_report(outcome.scores, meta, out, errors=outcome.errors)
@@ -493,7 +497,11 @@ def _main_offline(args: argparse.Namespace, configs: list[str]) -> int:
     with psycopg.connect(admin_url, autocommit=True) as admin_conn:
         schema_sha = prepare_database(admin_conn, args.schema)
         outcome = run_offline(
-            ROOT / "evals" / "conversations", configs, admin_conn, agent_url_from(admin_url)
+            ROOT / "evals" / "conversations",
+            configs,
+            admin_conn,
+            agent_url_from(admin_url),
+            only=args.only,
         )
     meta = ReportMeta(
         date=date.today(),
@@ -506,6 +514,7 @@ def _main_offline(args: argparse.Namespace, configs: list[str]) -> int:
         n_conversations=outcome.n_conversations,
         cost_usd=0.0,
         partial=False,
+        only=args.only,
     )
     write_report(outcome.scores, meta, args.out)
     print(f"report: {args.out}")

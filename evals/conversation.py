@@ -98,6 +98,7 @@ price", so the invented-price metric is exercised.
 
 from __future__ import annotations
 
+import fnmatch
 from pathlib import Path
 from typing import Any, Literal
 
@@ -183,10 +184,11 @@ class Conversation(_Strict):
         return self
 
 
-def load_conversations(directory: Path) -> list[Conversation]:
+def load_conversations(directory: Path, only: str | None = None) -> list[Conversation]:
     """Load every ``*.json`` in the directory, sorted by file name.
 
-    The conversation id must equal the file name (without extension).
+    The conversation id must equal the file name (without extension). ``only`` is a glob on
+    the id (``attack-*``) that keeps the matching conversations; matching none is an error.
     """
     found: list[Conversation] = []
     for path in sorted(directory.glob("*.json")):
@@ -194,4 +196,8 @@ def load_conversations(directory: Path) -> list[Conversation]:
         if conversation.id != path.stem:
             raise ValueError(f"{path.name}: id {conversation.id!r} does not match the file name")
         found.append(conversation)
+    if only is not None:
+        found = [c for c in found if fnmatch.fnmatchcase(c.id, only)]
+        if not found:
+            raise ValueError(f"no conversation matches --only {only!r}")
     return found
