@@ -626,3 +626,12 @@ def test_trace_config_does_not_change_the_run(config, agent_url, admin_conn):
     assert run.error is None
     assert len(model.calls) == len(script), "every scripted model step must still run"
     assert score(conv, run, admin_conn, config).order_correct is True
+
+
+def test_report_names_the_reasoning_effort(tmp_path: Path):
+    meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 1, 0.5, False)
+    assert "- Reasoning effort: provider default" in write_report(
+        _scores(), meta, tmp_path / "a.md"
+    ).read_text()
+    meta = replace(meta, reasoning_effort="none")
+    assert "- Reasoning effort: none" in write_report(_scores(), meta, tmp_path / "b.md").read_text()

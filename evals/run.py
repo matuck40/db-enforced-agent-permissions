@@ -493,6 +493,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
         partial=outcome.partial,
         calls_without_usage=outcome.calls_without_usage,
         trace_run_id=outcome.trace_run_id,
+        reasoning_effort=settings.reasoning_effort,
         only=args.only,
     )
     out = args.out or default_real_out(meta.date)

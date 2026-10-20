@@ -28,6 +28,7 @@ class ReportMeta:
     partial: bool
     calls_without_usage: int = 0
     trace_run_id: str | None = None
+    reasoning_effort: str | None = None  # AGENT_REASONING_EFFORT; None: provider default
     only: str | None = None  # the --only glob, when the run used a subset of conversations
 
 
@@ -62,6 +63,11 @@ def write_report(
         f"- Date: {meta.date.isoformat()}",
         f"- Mode: {meta.mode}",
         f"- Provider / model: {meta.provider} / {meta.model}",
+        *(
+            [f"- Reasoning effort: {meta.reasoning_effort or 'provider default'}"]
+            if meta.mode == "real"
+            else []
+        ),
         f"- PROMPT_VERSION: {meta.prompt_version}",
         f"- BASELINE_PROMPT_VERSION: {meta.baseline_prompt_version}",
         f"- schema_sha: {meta.schema_sha}",
