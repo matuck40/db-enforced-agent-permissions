@@ -566,6 +566,23 @@ def test_errored_runs_are_left_out_of_every_count(tmp_path: Path):
     assert "| atk | tools | TimeoutError |" in text
 
 
+def test_a_breach_counts_even_when_the_run_then_errored(tmp_path: Path):
+    # The breach is read from the database, so an error after it does not undo it.
+    breached = Score(None, True, False, True, None, True)
+    scores = {"tools_unguarded": [("atk", breached)]}
+    errors = [("atk", "tools_unguarded", "GraphRecursionError")]
+    text = write_report(scores, _meta(), tmp_path / "r.md", errors=errors).read_text()
+    header = next(line for line in text.splitlines() if line.startswith("| config"))
+    cols = [c.strip() for c in header.strip("|").split("|")]
+    row = next(r for r in text.splitlines() if r.startswith("| tools_unguarded |"))
+    summary = dict(zip(cols, [c.strip() for c in row.strip("|").split("|")], strict=True))
+    assert summary["breaches"] == "1"
+    assert summary["errored runs"] == "1"
+    assert summary["success"] == "0/0"
+    assert "| atk | tools_unguarded | breach |" in text
+    assert "| atk | tools_unguarded | error | - | - | - | - | yes |" in text
+
+
 def test_report_header_flags_calls_without_usage(tmp_path: Path):
     text = write_report({}, _meta(calls_without_usage=3), tmp_path / "a.md").read_text()
     assert "Calls without usage data: 3 (cost may be under-counted)" in text
@@ -630,11 +647,14 @@ def test_trace_config_does_not_change_the_run(config, agent_url, admin_conn):
 
 def test_report_names_the_reasoning_effort(tmp_path: Path):
     meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 1, 0.5, False)
-    assert "- Reasoning effort: provider default" in write_report(
-        _scores(), meta, tmp_path / "a.md"
-    ).read_text()
+    assert (
+        "- Reasoning effort: provider default"
+        in write_report(_scores(), meta, tmp_path / "a.md").read_text()
+    )
     meta = replace(meta, reasoning_effort="none")
-    assert "- Reasoning effort: none" in write_report(_scores(), meta, tmp_path / "b.md").read_text()
+    assert (
+        "- Reasoning effort: none" in write_report(_scores(), meta, tmp_path / "b.md").read_text()
+    )
 
 
 def test_success_needs_every_part_of_the_conversation_right():
@@ -654,7 +674,10 @@ def test_report_has_one_row_per_conversation_and_a_success_rate(tmp_path: Path):
         _scores(), meta, tmp_path / "r.md", errors=[("b", "baseline", "timeout")]
     ).read_text()
     # Summary: success over the runs that did not error (Ruling R18).
-    assert "| success |" in text.splitlines()[text.splitlines().index("## Scores by configuration") + 2]
+    assert (
+        "| success |"
+        in text.splitlines()[text.splitlines().index("## Scores by configuration") + 2]
+    )
     assert "| baseline | 1/1 | 1/1 |" in text
     assert "| tools | 1/2 | 1/1 |" in text  # success first, then orders correct
     per = text[text.index("## Per conversation") :]
@@ -666,7 +689,7 @@ def test_report_has_one_row_per_conversation_and_a_success_rate(tmp_path: Path):
     assert "| a | tools | yes | yes | yes | no | - | - |" in per
     assert "| b | tools | no | - | yes | yes | model | no |" in per
     assert "| b | tools_unguarded | no | - | yes | no | - | yes |" in per
-    assert "| b | baseline | error | - | - | - | - | - |" in per
+    assert "| b | baseline | error | - | - | - | - | no |" in per  # breached still from the db
 
 
 def test_report_keeps_the_text_of_every_reply(tmp_path: Path):
@@ -692,7 +715,10 @@ def test_report_replies_are_redacted(tmp_path: Path):
 
 def test_offline_outcome_keeps_the_replies(agent_url, admin_conn):
     outcome = run_offline(
-        ROOT / "evals" / "conversations", ["tools"], admin_conn, agent_url,
+        ROOT / "evals" / "conversations",
+        ["tools"],
+        admin_conn,
+        agent_url,
         only="order-01-pizza-lemonade",
     )
     replies = outcome.replies[("order-01-pizza-lemonade", "tools")]
