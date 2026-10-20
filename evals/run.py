@@ -227,6 +227,8 @@ def prepare_database(admin_conn, schemas: Sequence[Path]) -> str:
 @dataclass
 class OfflineOutcome:
     scores: dict[str, list[tuple[str, Score]]] = field(default_factory=dict)
+    # (conversation id, config) -> the replies the model sent the customer
+    replies: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     n_conversations: int = 0
 
@@ -250,6 +252,7 @@ def run_offline(
             script = getattr(conv.scripts, config)
             model = OfflineModel(script=script)
             run = run_conversation(conv, config, model, factory, admin_conn)  # type: ignore[arg-type]
+            outcome.replies[(conv.id, config)] = list(run.replies)
             result = score(conv, run, admin_conn, config)  # type: ignore[arg-type]
             outcome.scores[config].append((conv.id, result))
             outcome.failures += _check(conv, config, run, result, model, len(script))
@@ -259,6 +262,8 @@ def run_offline(
 @dataclass
 class RealOutcome:
     scores: dict[str, list[tuple[str, Score]]] = field(default_factory=dict)
+    # (conversation id, config) -> the replies the model sent the customer
+    replies: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     errors: list[tuple[str, str, str]] = field(default_factory=list)  # conversation, config, text
     cost_usd: float = 0.0
     partial: bool = False
@@ -370,6 +375,7 @@ def run_real(
                     tracing=tracing,
                 )
                 run = replace(run, cost_usd=handler.total_usd - before)
+                outcome.replies[(conv.id, config)] = list(run.replies)
                 outcome.scores[config].append((conv.id, score(conv, run, admin_conn, config)))  # type: ignore[arg-type]
                 if run.error:
                     outcome.errors.append((conv.id, config, run.error))
@@ -497,7 +503,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
         only=args.only,
     )
     out = args.out or default_real_out(meta.date)
-    write_report(outcome.scores, meta, out, errors=outcome.errors)
+    write_report(outcome.scores, meta, out, errors=outcome.errors, replies=outcome.replies)
     print(f"report: {out}")
     print(
         f"cost: {outcome.cost_usd:.4f} USD of {cap} USD"
@@ -534,7 +540,7 @@ def _main_offline(args: argparse.Namespace, configs: list[str]) -> int:
         partial=False,
         only=args.only,
     )
-    write_report(outcome.scores, meta, args.out)
+    write_report(outcome.scores, meta, args.out, replies=outcome.replies)
     print(f"report: {args.out}")
     for line in outcome.failures:
         print(f"FAIL {line}", file=sys.stderr)

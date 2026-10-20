@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from evals.scoring import Score
+from order_agent.redact import redact
 
 OFFLINE_NOTE = "Scripted model: measures the harness and the database, not model behaviour"
 LAYERS = ("model", "interface", "validation", "database")
@@ -63,10 +64,13 @@ def write_report(
     meta: ReportMeta,
     out: Path,
     errors: Sequence[tuple[str, str, str]] = (),
+    replies: dict[tuple[str, str], list[str]] | None = None,
 ) -> Path:
     """``scores`` maps a configuration to its (conversation id, Score) pairs.
 
     ``errors`` are (conversation id, config, redacted text) for runs that ended in an error.
+    ``replies`` maps (conversation id, config) to the text the model sent the customer, so a
+    score can be checked against what was said; each reply is redacted and kept on one line.
     """
     lines = [
         "# Eval report",
@@ -161,6 +165,15 @@ def write_report(
         lines += _table(
             ["conversation", "config", "error"], [[c, k, _cell(e)] for c, k, e in errors]
         )
+    if replies:
+        lines += ["", "## Replies", ""]
+        for (conversation_id, config), texts in replies.items():
+            lines += [f"### {conversation_id} · {config}", ""]
+            if texts:
+                lines += [f"{i}. {_one_line(t)}" for i, t in enumerate(texts, 1)]
+            else:
+                lines.append("(no reply)")
+            lines.append("")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
@@ -183,3 +196,7 @@ def _per_conversation(conversation_id: str, config: str, s: Score, errored: bool
         s.blocked_by or "-",
         _yes_no(s.breached),
     ]
+
+
+def _one_line(text: str) -> str:
+    return " ".join(redact(text).split())

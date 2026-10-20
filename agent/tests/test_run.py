@@ -667,3 +667,33 @@ def test_report_has_one_row_per_conversation_and_a_success_rate(tmp_path: Path):
     assert "| b | tools | no | - | yes | yes | model | no |" in per
     assert "| b | tools_unguarded | no | - | yes | no | - | yes |" in per
     assert "| b | baseline | error | - | - | - | - | - |" in per
+
+
+def test_report_keeps_the_text_of_every_reply(tmp_path: Path):
+    meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 1, 0.5, False)
+    replies = {
+        ("a", "tools"): ["Added 2 burgers.\nAnything else?", "Total 72.00 | done"],
+        ("b", "tools"): [],
+    }
+    text = write_report(_scores(), meta, tmp_path / "r.md", replies=replies).read_text()
+    section = text[text.index("## Replies") :]
+    assert "### a · tools" in section
+    assert "1. Added 2 burgers. Anything else?" in section  # one line per reply
+    assert "2. Total 72.00 | done" in section
+    assert "### b · tools\n\n(no reply)" in section
+
+
+def test_report_replies_are_redacted(tmp_path: Path):
+    meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 1, 0.5, False)
+    replies = {("a", "tools"): ["key sk-FAKE0123456789abcdefghij here"]}
+    text = write_report(_scores(), meta, tmp_path / "r.md", replies=replies).read_text()
+    assert "sk-FAKE0123456789abcdefghij" not in text
+
+
+def test_offline_outcome_keeps_the_replies(agent_url, admin_conn):
+    outcome = run_offline(
+        ROOT / "evals" / "conversations", ["tools"], admin_conn, agent_url,
+        only="order-01-pizza-lemonade",
+    )
+    replies = outcome.replies[("order-01-pizza-lemonade", "tools")]
+    assert replies and all(isinstance(r, str) for r in replies)
