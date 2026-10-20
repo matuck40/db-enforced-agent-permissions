@@ -8,6 +8,7 @@ from pathlib import Path
 
 import evals.run as run_module
 import pytest
+from evals.conversation import load_conversations
 from evals.cost import UsageHandler
 from evals.report import ReportMeta, write_report
 from evals.run import (
@@ -18,8 +19,9 @@ from evals.run import (
     run_conversation,
     run_offline,
     run_real,
+    trace_config,
 )
-from evals.scoring import Score
+from evals.scoring import Score, score
 from test_scoring import conv
 
 from order_agent.db import AgentDB
@@ -593,7 +595,9 @@ def test_real_run_reports_calls_without_usage(agent_url, admin_conn):
 
 def test_report_names_the_conversation_filter(tmp_path: Path):
     meta = ReportMeta(date(2026, 10, 20), "real", "openai", "m", "p", "b", "0" * 12, 16, 0.5, False)
-    assert "Conversations selected" not in write_report(_scores(), meta, tmp_path / "a.md").read_text()
+    assert (
+        "Conversations selected" not in write_report(_scores(), meta, tmp_path / "a.md").read_text()
+    )
     meta = replace(meta, only="attack-*")
     text = write_report(_scores(), meta, tmp_path / "b.md").read_text()
     assert "- Conversations selected: `attack-*`" in text
@@ -602,3 +606,23 @@ def test_report_names_the_conversation_filter(tmp_path: Path):
 def test_parse_accepts_only():
     assert run_module._parse([*ARGS, "--only", "attack-*"]).only == "attack-*"
     assert run_module._parse(ARGS).only is None
+
+
+@pytest.mark.parametrize("config", ["baseline", "tools"])
+def test_trace_config_does_not_change_the_run(config, agent_url, admin_conn):
+    # A real run passes this config to every graph and baseline call. LangGraph reads some
+    # config keys itself, so the trace metadata must leave a multi-turn conversation intact.
+    conv = next(
+        c
+        for c in load_conversations(ROOT / "evals" / "conversations")
+        if c.id == "order-01-pizza-lemonade"
+    )
+    script = getattr(conv.scripts, config)
+    model = OfflineModel(script=script)
+    tracing = trace_config(conv.id, "2026-10-20-x", "p", "s", "abcd1234", handlers=[])
+    run = run_conversation(
+        conv, config, model, lambda t: AgentDB.connect(agent_url, t), admin_conn, tracing=tracing
+    )
+    assert run.error is None
+    assert len(model.calls) == len(script), "every scripted model step must still run"
+    assert score(conv, run, admin_conn, config).order_correct is True

@@ -264,7 +264,31 @@ class RealOutcome:
     partial: bool = False
     n_conversations: int = 0
     calls_without_usage: int = 0
-    trace_run_id: str | None = None  # in every trace seed and trace metadata; None: no tracing
+    # In every trace seed and, as eval_run_id, in trace metadata; None: no tracing.
+    trace_run_id: str | None = None
+
+
+def trace_config(
+    conv_id: str,
+    session: str,
+    prompt_version: str,
+    schema_sha: str,
+    run_id: str | None,
+    handlers: Sequence[Any],
+) -> dict[str, Any]:
+    """The run config that makes one conversation one trace (callbacks, name, metadata)."""
+    return {
+        "callbacks": list(handlers),
+        "run_name": conv_id,
+        "metadata": {
+            "langfuse_session_id": session,
+            "prompt_version": prompt_version,
+            "schema_sha": schema_sha,
+            # Not "run_id": LangGraph reads that key from the config and the graph stops
+            # calling the model after the first turn.
+            "eval_run_id": run_id,
+        },
+    }
 
 
 def run_real(
@@ -330,16 +354,9 @@ def run_real(
                 )
                 tracers += handlers
                 tracing = (
-                    {
-                        "callbacks": handlers,
-                        "run_name": conv.id,
-                        "metadata": {
-                            "langfuse_session_id": session,
-                            "prompt_version": prompt_version,
-                            "schema_sha": schema_sha,
-                            "run_id": outcome.trace_run_id,
-                        },
-                    }
+                    trace_config(
+                        conv.id, session, prompt_version, schema_sha, outcome.trace_run_id, handlers
+                    )
                     if handlers
                     else None
                 )

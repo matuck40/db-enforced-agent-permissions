@@ -71,7 +71,7 @@ def write_report(
         f"- Partial run: {'yes' if meta.partial else 'no'}",
     ]
     if meta.trace_run_id:
-        lines.append(f"- Langfuse run id (in every trace seed and metadata): {meta.trace_run_id}")
+        lines.append(f"- Langfuse run id (in every trace seed, and as eval_run_id in trace metadata): {meta.trace_run_id}")
     if meta.calls_without_usage:
         lines.append(
             f"- Calls without usage data: {meta.calls_without_usage} (cost may be under-counted)"
