@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from evals.cost import (
     PRICES_PATH,
@@ -42,12 +44,15 @@ def test_empty_price_fails_fast():
         model_prices("m", missing)
 
 
-def test_shipped_prices_file_holds_no_numbers():
+def test_shipped_prices_are_complete_and_say_where_they_came_from():
+    # The numbers are copied by hand from the provider's page; the file must say when and where.
+    text = PRICES_PATH.read_text(encoding="utf-8")
+    assert re.search(r"^# Checked on \(YYYY-MM-DD\): \d{4}-\d{2}-\d{2}$", text, re.MULTILINE)
+    assert re.search(r"^# Source URL: https://\S+", text, re.MULTILINE)
     prices = load_prices(PRICES_PATH)
-    assert prices["models"], "the file must have a table for the owner to fill in"
+    assert prices["models"]
     for name in prices["models"]:
-        with pytest.raises(PriceError):
-            model_prices(name, prices)
+        assert all(v > 0 for v in model_prices(name, prices).values()), name
 
 
 def test_handler_sums_input_cached_and_output():
