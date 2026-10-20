@@ -218,3 +218,12 @@ def test_two_submits_in_one_turn_create_nothing(node, admin_conn):
     assert order_count(admin_conn) == before
     assert out["order_ids"] == []
     assert [e.decided_by for e in out["events"]] == ["tool", "tool"]
+
+
+def test_tool_descriptions_carry_the_order_mechanics():
+    # tools_unguarded has no rules in its prompt, so how an order is sent must be in the
+    # tool descriptions that both tool configurations share, not only in the guarded prompt.
+    tools = {t.name: t for t in make_tools(None)}  # type: ignore[arg-type]
+    text = tools["submit_order"].description
+    assert "draft" in text
+    assert 'update_order_status(order_id, "submitted")' in text

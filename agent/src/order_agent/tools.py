@@ -89,10 +89,12 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
         order_ids: Annotated[list[str], InjectedState("order_ids")],
         messages: Annotated[list, InjectedState("messages")],
     ) -> Command:
-        """Create the order from the cart. It takes no arguments; the order label is
-        set by the system, so do not ask the customer for a name.
+        """Create the order from the cart, as a draft. It takes no arguments; the order
+        label is set by the system, so do not ask the customer for a name.
         Call it alone in its own turn, after the cart is final.
-        Returns the order id and the total computed by the database."""
+        Returns the order id and the total computed by the database. The draft is not
+        sent yet: once the customer confirms it, call
+        update_order_status(order_id, "submitted")."""
         lines = [{"menu_item_id": k, "quantity": q} for k, q in cart.items()]
         args = {"customer_label": CUSTOMER_LABEL, "lines": lines}
         turn_calls = _last_ai_calls(messages)
