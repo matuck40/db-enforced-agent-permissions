@@ -104,9 +104,7 @@ def test_submit_empty_cart_does_not_touch_db(node, admin_conn):
 
 def test_second_submit_refused(node, admin_conn):
     before = order_count(admin_conn)
-    _, update = call(
-        node, "submit_order", {}, cart={PIZZA: 1}, order_ids=["existing"]
-    )
+    _, update = call(node, "submit_order", {}, cart={PIZZA: 1}, order_ids=["existing"])
     assert order_count(admin_conn) == before
     assert update["events"][0].decided_by == "tool"
     assert update["events"][0].outcome == "refused"
