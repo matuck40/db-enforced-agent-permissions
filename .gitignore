@@ -12,3 +12,9 @@ CLAUDE.local.md
 .claude/
 docs/BRIEFING-agente.md
 docs/superpowers/
+
+# Python and eval output
+.venv/
+__pycache__/
+.pytest_cache/
+evals/reports/offline-latest.md

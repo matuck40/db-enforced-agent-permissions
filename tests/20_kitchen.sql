@@ -12,7 +12,8 @@
 begin;
 select test.connected_as('kitchen');
 
-select test.assert((select count(*) from app.orders) = 3,
+-- Four: the three fixtures of tests/setup.sql and tests/legacy_orders.sql.
+select test.assert((select count(*) from app.orders) = 4,
   'sees every order, from every channel');
 
 -- The preparation steps belong to this station.

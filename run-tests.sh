@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Starts a fresh Postgres, loads the schema, and runs every role test as that
-# role. Needs only Docker. Exit code is 0 only if every file passed.
+# Starts a fresh Postgres, loads the schema (schema.sql, then every file in
+# migrations/ in name order), and runs every role test as that role. Needs
+# only Docker. Exit code is 0 only if every file passed.
 #
 #   ./run-tests.sh              run and tear down
 #   KEEP_DB=1 ./run-tests.sh    leave the database up afterwards (port 55432)
@@ -31,8 +32,16 @@ fi
 
 failed=0
 
-# Setup is the only step that runs as the bootstrap superuser.
+# Setup is the only step that runs as the bootstrap superuser. The current
+# schema is schema.sql plus migrations/*.sql in name order; the legacy rows go
+# in between, so the suite sees what each migration does to existing data.
 psql_as postgres < schema.sql
+psql_as postgres < tests/legacy_orders.sql
+for migration in migrations/*.sql; do
+  [ -e "$migration" ] || continue
+  echo "== applying $migration"
+  psql_as postgres < "$migration"
+done
 
 # The schema as deployed, before tests/setup.sql enables the owner's login for
 # tests/60: nothing can connect as app_owner, the BYPASSRLS schema owner.

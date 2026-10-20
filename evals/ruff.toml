@@ -1,0 +1,5 @@
+# Same settings whether ruff runs from the repo root or from agent/ (CI).
+line-length = 100
+
+[lint.isort]
+known-first-party = ["evals", "order_agent"]
