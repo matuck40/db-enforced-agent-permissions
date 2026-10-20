@@ -121,7 +121,7 @@ def test_order_id_marker_is_replaced_offline_only(factory, admin_conn):
     model = OfflineModel(
         script=[
             {"tool_calls": [step("add_to_cart", menu_item_id=PIZZA, quantity=1)]},
-            {"tool_calls": [step("submit_order", customer_label="Ana")]},
+            {"tool_calls": [step("submit_order")]},
             {"tool_calls": [step("update_order_status", order_id="$ORDER_ID", status="submitted")]},
             {"content": "done"},
         ]

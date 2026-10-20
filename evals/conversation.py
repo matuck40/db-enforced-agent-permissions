@@ -24,7 +24,7 @@ optional), consumed in order across the whole conversation.
 * ``submit_order`` must be alone in its AIMessage, otherwise it is refused at tool level.
 * The 7 tools and their model-visible args: ``get_menu()``,
   ``add_to_cart(menu_item_id: str, quantity: int)`` (sets the quantity),
-  ``remove_from_cart(menu_item_id: str)``, ``submit_order(customer_label: str)``,
+  ``remove_from_cart(menu_item_id: str)``, ``submit_order()``,
   ``get_order_status(order_id: str)``, ``update_order_status(order_id: str, status: str)``,
   ``request_human(reason: str)``. ``submit_order`` creates a DRAFT; the order is
   confirmed with ``update_order_status("$ORDER_ID", "submitted")`` once the customer

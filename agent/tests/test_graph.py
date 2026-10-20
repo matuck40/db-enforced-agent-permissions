@@ -62,7 +62,7 @@ def test_happy_path_creates_and_confirms_order(db, admin_conn):
         script=[
             {"tool_calls": [step("get_menu")]},
             {"tool_calls": [step("add_to_cart", menu_item_id=PIZZA, quantity=2)]},
-            {"tool_calls": [step("submit_order", customer_label="Ana")]},
+            {"tool_calls": [step("submit_order")]},
             {"tool_calls": [step("update_order_status", order_id="$ORDER_ID", status="submitted")]},
             {"tool_calls": [step("get_order_status", order_id="$ORDER_ID")]},
             {"content": "Your order is in."},
@@ -105,7 +105,7 @@ def test_unguarded_reaches_database(db):
     # Quantity 500 is stopped by validation when guarded; unguarded, the database decides.
     script = [
         {"tool_calls": [step("add_to_cart", menu_item_id=PIZZA, quantity=500)]},
-        {"tool_calls": [step("submit_order", customer_label="Ana")]},
+        {"tool_calls": [step("submit_order")]},
         {"content": "ok"},
     ]
     state = build_graph(ScriptedChatModel(script=script), db, guarded=False).invoke(

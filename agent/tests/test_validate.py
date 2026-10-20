@@ -92,7 +92,7 @@ def test_valid_calls_pass_through_unchanged():
         call("get_menu", {}, "a"),
         call("add_to_cart", {"menu_item_id": "m-pizza", "quantity": 20}, "b"),
         call("remove_from_cart", {"menu_item_id": "m-soda"}, "c"),
-        call("submit_order", {"customer_label": "Ana"}, "d"),
+        call("submit_order", {}, "d"),
         call("get_order_status", {"order_id": "mine"}, "e"),
         call("update_order_status", {"order_id": "mine", "status": "submitted"}, "f"),
         call("request_human", {"reason": "help"}, "g"),
@@ -117,3 +117,9 @@ def test_spec_matches_model_visible_tool_args():
         for t in make_tools(None)
     }
     assert TOOL_ARGS == visible
+
+
+@pytest.mark.parametrize("args", [{"customer_label": "Ana"}, {"x": 1}])
+def test_submit_order_takes_no_arguments(args):
+    reason = assert_refused([call("submit_order", args)])
+    assert reason == f"refused by validation: unexpected argument: {next(iter(args))}"

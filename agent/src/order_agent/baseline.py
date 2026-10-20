@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from order_agent.db import AgentDB, DbRefusal
 from order_agent.events import Event
+from order_agent.tools import CUSTOMER_LABEL
 
 ACTIONS = ("continue", "submit", "confirm", "human")
 
@@ -72,7 +73,6 @@ Rules:
 BASELINE_PROMPT_VERSION = hashlib.sha256(BASELINE_PROMPT.encode()).hexdigest()[:12]
 
 DEFAULT_REPLY = "Sorry, I could not process that. Could you repeat it?"
-CUSTOMER_LABEL = "Chat customer"
 
 
 @dataclass

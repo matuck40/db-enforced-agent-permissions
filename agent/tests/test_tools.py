@@ -11,7 +11,7 @@ from test_db import COUNTER_ORDER, PIZZA, TOKEN
 from order_agent.db import AgentDB
 from order_agent.events import Event
 from order_agent.state import OrderState
-from order_agent.tools import make_tools
+from order_agent.tools import CUSTOMER_LABEL, make_tools
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ def test_cart_changes_state_only(node):
 
 
 def test_submit_uses_catalog_price(node):
-    text, update = call(node, "submit_order", {"customer_label": "Ana"}, cart={PIZZA: 2})
+    text, update = call(node, "submit_order", {}, cart={PIZZA: 2})
     assert len(update["order_ids"]) == 1
     assert update["order_ids"][0] in text
     assert Decimal("84.00") == Decimal(text.rsplit(" ", 1)[1])
@@ -88,14 +88,14 @@ def test_submit_uses_catalog_price(node):
     assert update["events"][0].outcome == "ok"
     assert update["cart"] == {PIZZA: 2}
     assert update["events"][0].args == {
-        "customer_label": "Ana",
+        "customer_label": CUSTOMER_LABEL,
         "lines": [{"menu_item_id": PIZZA, "quantity": 2}],
     }
 
 
 def test_submit_empty_cart_does_not_touch_db(node, admin_conn):
     before = order_count(admin_conn)
-    _, update = call(node, "submit_order", {"customer_label": "Ana"})
+    _, update = call(node, "submit_order", {})
     assert order_count(admin_conn) == before
     assert update["events"][0].decided_by == "tool"
     assert update["events"][0].outcome == "refused"
@@ -105,7 +105,7 @@ def test_submit_empty_cart_does_not_touch_db(node, admin_conn):
 def test_second_submit_refused(node, admin_conn):
     before = order_count(admin_conn)
     _, update = call(
-        node, "submit_order", {"customer_label": "Ana"}, cart={PIZZA: 1}, order_ids=["existing"]
+        node, "submit_order", {}, cart={PIZZA: 1}, order_ids=["existing"]
     )
     assert order_count(admin_conn) == before
     assert update["events"][0].decided_by == "tool"
@@ -113,7 +113,7 @@ def test_second_submit_refused(node, admin_conn):
 
 
 def test_bad_line_refused_by_database_without_id(node):
-    text, update = call(node, "submit_order", {"customer_label": "Ana"}, cart={PIZZA: 0})
+    text, update = call(node, "submit_order", {}, cart={PIZZA: 0})
     assert text.startswith("refused by the database: ")
     assert update["order_ids"] == []
     assert update["events"][0].decided_by == "database"
@@ -161,7 +161,7 @@ def test_model_sees_only_real_arguments(db):
     shown = {
         t.name: set(t.tool_call_schema.model_json_schema()["properties"]) for t in make_tools(db)
     }
-    assert shown["submit_order"] == {"customer_label"}
+    assert shown["submit_order"] == set()
     assert shown["add_to_cart"] == {"menu_item_id", "quantity"}
     assert shown["get_menu"] == set()
 
@@ -198,7 +198,7 @@ def test_add_and_submit_in_one_turn_refuses_submit(node, admin_conn):
         node,
         [
             ("add_to_cart", {"menu_item_id": PIZZA, "quantity": 1}),
-            ("submit_order", {"customer_label": "Ana"}),
+            ("submit_order", {}),
         ],
         cart={PIZZA: 1},
     )
@@ -212,7 +212,7 @@ def test_two_submits_in_one_turn_create_nothing(node, admin_conn):
     before = order_count(admin_conn)
     out = call_many(
         node,
-        [("submit_order", {"customer_label": "Ana"})] * 2,
+        [("submit_order", {})] * 2,
         cart={PIZZA: 1},
     )
     assert order_count(admin_conn) == before

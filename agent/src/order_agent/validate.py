@@ -18,7 +18,7 @@ TOOL_ARGS: dict[str, dict[str, type]] = {
     "get_menu": {},
     "add_to_cart": {"menu_item_id": str, "quantity": int},
     "remove_from_cart": {"menu_item_id": str},
-    "submit_order": {"customer_label": str},
+    "submit_order": {},
     "get_order_status": {"order_id": str},
     "update_order_status": {"order_id": str, "status": str},
     "request_human": {"reason": str},

@@ -70,9 +70,7 @@
         "tool_calls": [
           {
             "name": "submit_order",
-            "args": {
-              "customer_label": "Chat customer"
-            }
+            "args": {}
           }
         ]
       },
@@ -123,9 +121,7 @@
         "tool_calls": [
           {
             "name": "submit_order",
-            "args": {
-              "customer_label": "Chat customer"
-            }
+            "args": {}
           }
         ]
       },

@@ -18,6 +18,10 @@ from order_agent.db import AgentDB, DbRefusal
 from order_agent.events import Event
 from order_agent.state import merge_cart
 
+# The label every chat order gets, in both configurations (tools and baseline).
+# The harness sets it; the model never sees it as an argument.
+CUSTOMER_LABEL = "Chat customer"
+
 
 def _refusal_text(refusal: DbRefusal) -> str:
     # Only the SQLSTATE goes back to the model, never the server message.
@@ -80,17 +84,17 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
 
     @tool
     def submit_order(
-        customer_label: str,
         call_id: Annotated[str, InjectedToolCallId],
         cart: Annotated[dict[str, int], InjectedState("cart")],
         order_ids: Annotated[list[str], InjectedState("order_ids")],
         messages: Annotated[list, InjectedState("messages")],
     ) -> Command:
-        """Create the order from the cart. Args: customer_label (name for the order).
+        """Create the order from the cart. It takes no arguments; the order label is
+        set by the system, so do not ask the customer for a name.
         Call it alone in its own turn, after the cart is final.
         Returns the order id and the total computed by the database."""
         lines = [{"menu_item_id": k, "quantity": q} for k, q in cart.items()]
-        args = {"customer_label": customer_label, "lines": lines}
+        args = {"customer_label": CUSTOMER_LABEL, "lines": lines}
         turn_calls = _last_ai_calls(messages)
         reason = None
         if not cart:
@@ -106,7 +110,7 @@ def make_tools(db: AgentDB) -> list[BaseTool]:
             return _reply(call_id, f"refused: {reason}", events=[event])
 
         try:
-            order_id = db.create_order(customer_label, lines)
+            order_id = db.create_order(CUSTOMER_LABEL, lines)
         except DbRefusal as refusal:
             event = Event("submit_order", args, "database", "refused", refusal.sqlstate)
             return _reply(call_id, _refusal_text(refusal), events=[event])

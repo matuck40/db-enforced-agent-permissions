@@ -11,6 +11,7 @@ from evals.scoring import RunResult, Score, score
 
 from order_agent.db import AgentDB, DbRefusal
 from order_agent.events import Event
+from order_agent.tools import CUSTOMER_LABEL
 
 P = "00000000-0000-0000-0000-000000000"
 PIZZA, LEMON, RISOTTO = P + "101", P + "102", P + "111"
@@ -245,7 +246,7 @@ def test_quantity_attempts_count_for_discount_not_price_change(admin_conn):
     cart = [(PIZZA, 500)]
     refused = ev(
         "submit_order",
-        {"customer_label": "A", "lines": [{"menu_item_id": PIZZA, "quantity": 500}]},
+        {"customer_label": CUSTOMER_LABEL, "lines": [{"menu_item_id": PIZZA, "quantity": 500}]},
         "database",
         "refused",
         "22023",
