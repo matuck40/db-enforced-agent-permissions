@@ -55,6 +55,33 @@ def test_env_without_package_raises(monkeypatch):
         make_callbacks(settings, "real")
 
 
+def test_import_error_text_is_kept_and_redacted(monkeypatch):
+    settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
+    real_import = builtins.__import__
+
+    def broken(name, *args, **kwargs):
+        if name.startswith("langfuse"):
+            raise ImportError("Please install langchain (key sk-abcdefghijklmnop12)")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", broken)
+    with pytest.raises(RuntimeError) as exc:
+        make_callbacks(settings, "real")
+    assert "Please install langchain" in str(exc.value)
+    assert "sk-abcdefghijklmnop12" not in str(exc.value)
+    assert "uv sync --extra tracing" in str(exc.value)
+
+
+def test_real_handler_builds_when_the_extra_is_installed(monkeypatch):
+    """Skipped in CI (no extra); locally it catches a missing transitive dependency."""
+    pytest.importorskip("langfuse.langchain")
+    for k, v in LANGFUSE_ENV.items():
+        monkeypatch.setenv(k, v)
+    settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
+    handlers = make_callbacks(settings, "real", trace_seed="2026-10-20-tools-n-c1")
+    assert len(handlers) == 1 and isinstance(handlers[0], BaseCallbackHandler)
+
+
 class Capture(BaseCallbackHandler):
     """Records everything a tracing handler would be given."""
 
@@ -176,3 +203,62 @@ def test_trace_id_is_per_conversation(monkeypatch):
     assert turn_1 == turn_2
     assert trace_id("2026-10-19-tools-c2") != turn_1
     assert trace_id("2026-10-19-baseline-c1") != turn_1
+
+
+def _run_real_seeds(monkeypatch, admin_conn, agent_url, **kw):
+    seeds: list[str] = []
+
+    def record(settings, mode, trace_seed=None):
+        seeds.append(trace_seed)
+        return [BaseCallbackHandler()]
+
+    monkeypatch.setattr(run_module, "make_callbacks", record)
+    monkeypatch.setattr(run_module, "flush", lambda handlers: None)
+    settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
+    prices = {"models": {"m": {"input": 1.0, "cached_input": 0.5, "output": 2.0}}}
+    outcome = run_module.run_real(
+        run_module.ROOT / "evals" / "conversations",
+        ["tools"],
+        admin_conn,
+        agent_url,
+        lambda: ScriptedChatModel(script=[{"content": "ok"}] * 500),
+        "m",
+        prices,
+        100.0,
+        settings=settings,
+        **kw,
+    )
+    return seeds, outcome
+
+
+def test_two_real_runs_never_share_a_trace(monkeypatch, admin_conn, agent_url):
+    first, out1 = _run_real_seeds(monkeypatch, admin_conn, agent_url)
+    second, out2 = _run_real_seeds(monkeypatch, admin_conn, agent_url)
+    assert out1.trace_run_id and out2.trace_run_id
+    assert out1.trace_run_id != out2.trace_run_id
+    # first element is the up-front probe; the rest are one per conversation
+    assert set(first[1:]).isdisjoint(second[1:])
+    assert all(out1.trace_run_id in seed for seed in first[1:])
+
+
+def test_missing_package_fails_before_any_model_call(monkeypatch, admin_conn, agent_url):
+    def boom(settings, mode, trace_seed=None):
+        raise RuntimeError("langfuse missing")
+
+    monkeypatch.setattr(run_module, "make_callbacks", boom)
+    built: list[int] = []
+    settings = Settings.from_env({**BASE, **LANGFUSE_ENV})
+    prices = {"models": {"m": {"input": 1.0, "cached_input": 0.5, "output": 2.0}}}
+    with pytest.raises(RuntimeError):
+        run_module.run_real(
+            run_module.ROOT / "evals" / "conversations",
+            ["tools"],
+            admin_conn,
+            agent_url,
+            lambda: built.append(1),
+            "m",
+            prices,
+            100.0,
+            settings=settings,
+        )
+    assert built == []

@@ -76,7 +76,11 @@ def test_handler_raises_once_over_the_cap():
 
 
 def test_handler_counts_calls_without_usage():
-    model = ScriptedChatModel(script=[{"content": "a", "usage": {"input_tokens": 1, "output_tokens": 0, "total_tokens": 1}}])
+    model = ScriptedChatModel(
+        script=[
+            {"content": "a", "usage": {"input_tokens": 1, "output_tokens": 0, "total_tokens": 1}}
+        ]
+    )
 
     class NoUsage(ScriptedChatModel):
         def _generate(self, *args, **kwargs):

@@ -33,6 +33,7 @@ import math
 import os
 import secrets
 import sys
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
@@ -263,6 +264,7 @@ class RealOutcome:
     partial: bool = False
     n_conversations: int = 0
     calls_without_usage: int = 0
+    trace_run_id: str | None = None  # in every trace seed and trace metadata; None: no tracing
 
 
 def run_real(
@@ -278,6 +280,7 @@ def run_real(
     config_date: date | None = None,
     prompt_version: str = PROMPT_VERSION,
     schema_sha: str = "",
+    run_nonce: str | None = None,
 ) -> RealOutcome:
     """Run every conversation in every configuration with a real model, under a cost cap.
 
@@ -295,54 +298,65 @@ def run_real(
     outcome = RealOutcome(scores={config: [] for config in configs})
     handler = UsageHandler(model_name, prices, max_usd)
     tracers: list[Any] = []  # every handler built, to flush at the end
+    if settings is not None and settings.langfuse:
+        # One nonce per call, so two runs on the same day never share a trace id. Random, not
+        # derived from anything of the conversation. A probe handler is built before any model
+        # call, so a broken extra fails here and not after money was spent.
+        outcome.trace_run_id = run_nonce or uuid.uuid4().hex[:8]
+        make_callbacks(settings, "real", trace_seed=f"probe-{outcome.trace_run_id}")
     day = (config_date or date.today()).isoformat()
 
     def factory(token: str) -> AgentDB:
         return AgentDB.connect(agent_url, token)
 
-    for conv in conversations:
-        if handler.over_cap:
-            break
-        outcome.n_conversations += 1
-        for config in configs:
+    try:
+        for conv in conversations:
             if handler.over_cap:
                 break
-            before = handler.total_usd
-            session = f"{day}-{config}"
-            # One handler per conversation and configuration, pinned to one trace id.
-            handlers = (
-                make_callbacks(settings, "real", trace_seed=f"{session}-{conv.id}")
-                if settings is not None
-                else []
-            )
-            tracers += handlers
-            tracing = (
-                {
-                    "callbacks": handlers,
-                    "run_name": conv.id,
-                    "metadata": {
-                        "langfuse_session_id": session,
-                        "prompt_version": prompt_version,
-                        "schema_sha": schema_sha,
-                    },
-                }
-                if handlers
-                else None
-            )
-            run = run_conversation(
-                conv,
-                config,
-                make_model_fn(),
-                factory,
-                admin_conn,  # type: ignore[arg-type]
-                callbacks=[handler],
-                tracing=tracing,
-            )
-            run = replace(run, cost_usd=handler.total_usd - before)
-            outcome.scores[config].append((conv.id, score(conv, run, admin_conn, config)))  # type: ignore[arg-type]
-            if run.error:
-                outcome.errors.append((conv.id, config, run.error))
-    flush(tracers)
+            outcome.n_conversations += 1
+            for config in configs:
+                if handler.over_cap:
+                    break
+                before = handler.total_usd
+                session = f"{day}-{config}"
+                # One handler per conversation and configuration, pinned to one trace id.
+                handlers = (
+                    make_callbacks(
+                        settings, "real", trace_seed=f"{session}-{outcome.trace_run_id}-{conv.id}"
+                    )
+                    if settings is not None
+                    else []
+                )
+                tracers += handlers
+                tracing = (
+                    {
+                        "callbacks": handlers,
+                        "run_name": conv.id,
+                        "metadata": {
+                            "langfuse_session_id": session,
+                            "prompt_version": prompt_version,
+                            "schema_sha": schema_sha,
+                            "run_id": outcome.trace_run_id,
+                        },
+                    }
+                    if handlers
+                    else None
+                )
+                run = run_conversation(
+                    conv,
+                    config,
+                    make_model_fn(),
+                    factory,
+                    admin_conn,  # type: ignore[arg-type]
+                    callbacks=[handler],
+                    tracing=tracing,
+                )
+                run = replace(run, cost_usd=handler.total_usd - before)
+                outcome.scores[config].append((conv.id, score(conv, run, admin_conn, config)))  # type: ignore[arg-type]
+                if run.error:
+                    outcome.errors.append((conv.id, config, run.error))
+    finally:
+        flush(tracers)
     outcome.cost_usd = handler.total_usd
     outcome.calls_without_usage = handler.calls_without_usage
     outcome.partial = handler.over_cap
@@ -458,6 +472,7 @@ def _main_real(args: argparse.Namespace, configs: list[str]) -> int:
         cost_usd=outcome.cost_usd,
         partial=outcome.partial,
         calls_without_usage=outcome.calls_without_usage,
+        trace_run_id=outcome.trace_run_id,
     )
     out = args.out or default_real_out(meta.date)
     write_report(outcome.scores, meta, out, errors=outcome.errors)

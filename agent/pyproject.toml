@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-tracing = ["langfuse==4.17.0"]
+tracing = ["langfuse==4.17.0", "langchain==1.4.3"]
 
 [build-system]
 requires = ["uv_build>=0.12.24,<0.13.0"]

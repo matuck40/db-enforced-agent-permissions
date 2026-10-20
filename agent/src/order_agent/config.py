@@ -24,8 +24,9 @@ class Settings:
         provider = env.get("AGENT_PROVIDER") or "openai"
         if provider not in PROVIDERS:
             raise ValueError(f"AGENT_PROVIDER must be one of {PROVIDERS}")
-        langfuse = all(
-            env.get(k) for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST")
+        # The SDK takes LANGFUSE_BASE_URL (preferred) or the deprecated LANGFUSE_HOST.
+        langfuse = all(env.get(k) for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")) and bool(
+            env.get("LANGFUSE_BASE_URL") or env.get("LANGFUSE_HOST")
         )
         return cls(
             database_url=database_url,

@@ -27,6 +27,7 @@ class ReportMeta:
     cost_usd: float
     partial: bool
     calls_without_usage: int = 0
+    trace_run_id: str | None = None
 
 
 def complied_in_text(score: Score) -> bool:
@@ -67,6 +68,8 @@ def write_report(
         f"- Cost (USD): {meta.cost_usd:.4f}",
         f"- Partial run: {'yes' if meta.partial else 'no'}",
     ]
+    if meta.trace_run_id:
+        lines.append(f"- Langfuse run id (in every trace seed and metadata): {meta.trace_run_id}")
     if meta.calls_without_usage:
         lines.append(
             f"- Calls without usage data: {meta.calls_without_usage} (cost may be under-counted)"

@@ -55,3 +55,13 @@ def test_settings_frozen():
     s = Settings.from_env(BASE)
     with pytest.raises(dataclasses.FrozenInstanceError):
         s.model = "x"  # type: ignore[misc]
+
+
+def test_langfuse_accepts_base_url_in_place_of_host():
+    env = {
+        "LANGFUSE_PUBLIC_KEY": "pk-lf-fake",
+        "LANGFUSE_SECRET_KEY": "sk-lf-fake",
+        "LANGFUSE_BASE_URL": "http://localhost:3000",
+    }
+    assert Settings.from_env({**BASE, **env}).langfuse is True
+    assert Settings.from_env({**BASE, **env, "LANGFUSE_BASE_URL": ""}).langfuse is False

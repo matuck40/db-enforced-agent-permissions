@@ -442,6 +442,20 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langgraph" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a2/aa/0fcaf5d7dbebcf7d0eb74293dca5aee6f0558242731f4dee4a800cc2431d/langchain-1.4.3.tar.gz", hash = "sha256:aed5c1a7cd581f70ddc076b75fdbcbae8031b8373983f86efd287aa70798abc2", size = 738607, upload-time = "2026-09-28T20:17:24.38Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/03/8cc027f9d297473de94f134546dae2bfca255161ebbda988522fc509e1d5/langchain-1.4.3-py3-none-any.whl", hash = "sha256:0334066939dd1c7551889727ed2d09a72dea7a6aed2193ffb61817fb658d8921", size = 164708, upload-time = "2026-09-28T20:17:22.978Z" },
+]
+
+[[package]]
 name = "langchain-anthropic"
 version = "1.7.6"
 source = { registry = "https://pypi.org/simple" }
@@ -751,6 +765,7 @@ dependencies = [
 
 [package.optional-dependencies]
 tracing = [
+    { name = "langchain" },
     { name = "langfuse" },
 ]
 
@@ -762,6 +777,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "langchain", marker = "extra == 'tracing'", specifier = "==1.4.3" },
     { name = "langchain-anthropic", specifier = ">=1.7.6" },
     { name = "langchain-core", specifier = ">=1.6.12" },
     { name = "langchain-openai", specifier = ">=1.7.2" },

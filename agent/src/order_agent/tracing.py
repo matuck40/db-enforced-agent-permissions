@@ -3,7 +3,9 @@
 Off unless all three LANGFUSE_* variables are set (``Settings.langfuse``) and the mode is
 real. The Langfuse SDK reads the keys and the host from those same environment variables;
 nothing is passed here. The package is an optional extra (``uv sync --extra tracing``), so
-it is imported only when a handler is actually built.
+it is imported only when a handler is actually built. Errors recorded by the Langfuse
+handler (``str(error)`` as a status message) are not passed through ``redact``: today no
+traced error carries a secret, but that is not enforced here.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 from langchain_core.callbacks import BaseCallbackHandler
 
 from order_agent.config import Settings
+from order_agent.redact import redact
 
 
 def make_callbacks(
@@ -29,7 +32,7 @@ def make_callbacks(
         from langfuse.langchain import CallbackHandler
     except ImportError as exc:
         raise RuntimeError(
-            "LANGFUSE_* variables are set but the langfuse package is not installed; "
+            f"LANGFUSE_* variables are set but tracing cannot start ({redact(str(exc))}); "
             "run `uv sync --extra tracing`, or unset them to run without tracing"
         ) from exc
     if trace_seed is None:
