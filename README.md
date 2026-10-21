@@ -167,4 +167,4 @@ The restaurant system is the same instinct applied to a different problem. Decid
 
 ---
 
-*The client system's full repository is private. This repository is the part that can be shown; I am happy to walk through the rest. Other public repositories: `rag-chatbot`, `probabilistic-load-forecast`.*
+*The client system's full repository is private. This repository is the part that can be shown; I am happy to walk through the rest. Other public repositories: [`rag-chatbot`](https://github.com/matuck40/rag-chatbot), [`probabilistic-load-forecast`](https://github.com/matuck40/probabilistic-load-forecast), [`mercadolivre-mcp`](https://github.com/matuck40/mercadolivre-mcp), [`timelapse-studio`](https://github.com/matuck40/timelapse-studio), [`fbg-fp-demod`](https://github.com/matuck40/fbg-fp-demod).*
