@@ -7,7 +7,7 @@
 **TL;DR**
 
 - Postgres row-level security, not the prompt, is the permission boundary for an LLM ordering agent.
-- Breaches in the real runs: **2 before** the conversation scope moved into the database, **0 after** (`tools_unguarded`; the guarded configurations had none in any run).
+- Breaches in the real runs: **2 before** the conversation scope moved into the database, **0 after** (`tools_unguarded`; the other two configurations had none in any run).
 - Measured on **40 synthetic conversations** (18 orders, 6 handoffs, 16 attacks), three configurations, one model.
 - Cost: US$ 0.36 for the 16 attacks before the fix, about **US$ 1** per full run of 40 conversations after it (US$ 0.9968 and US$ 0.9505).
 - `./run-tests.sh` runs the SQL role tests (needs only Docker); `evals/run.sh --mode offline --config all --schema schema.sql --schema migrations/001_conversation_scope.sql --out evals/reports/offline-latest.md` reproduces the scripted evals (Docker and uv).
