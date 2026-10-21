@@ -2,7 +2,15 @@
 
 [![CI](https://github.com/matuck40/db-enforced-agent-permissions/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/matuck40/db-enforced-agent-permissions/actions/workflows/ci.yml)
 
-### What I learned shipping an LLM ordering agent for a real restaurant
+### What I learned building an LLM ordering agent for a real restaurant
+
+**TL;DR**
+
+- Postgres row-level security, not the prompt, is the permission boundary for an LLM ordering agent.
+- Breaches in the real runs: **2 before** the conversation scope moved into the database, **0 after** (`tools_unguarded`; the guarded configurations had none in any run).
+- Measured on **40 synthetic conversations** (18 orders, 6 handoffs, 16 attacks), three configurations, one model.
+- Cost: US$ 0.36 for the 16 attacks before the fix, about **US$ 1** per full run of 40 conversations after it (US$ 0.9968 and US$ 0.9505).
+- `./run-tests.sh` runs the SQL role tests (needs only Docker); `evals/run.sh --mode offline --config all --schema schema.sql --schema migrations/001_conversation_scope.sql --out evals/reports/offline-latest.md` reproduces the scripted evals (Docker and uv).
 
 **What is in this repository.** A self-contained reimplementation of the permission layer of a client system, not a copy of it: the Postgres schema with row-level security on every table (`schema.sql`), one SQL test suite per database role that exercises the policies from that role's position, a regression test for the bug described below (inside the floor staff suite), a test that the agent role is refused outside its grant (inside the agent suite), and a `docker-compose.yml` that brings up a database to run all of it against. `./run-tests.sh` starts the container and runs everything; CI runs the same script against a Postgres service container. The schema is `schema.sql` plus the migrations in `migrations/`. The repository also holds an LLM ordering agent that connects only as the agent's database role (`agent/`), and the evals that measure it (`evals/`); both are described in [The agent](#the-agent).
 
