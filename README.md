@@ -137,7 +137,7 @@ To run them: `evals/run.sh --mode offline --config all --schema schema.sql --sch
 
 ## How it was built
 
-More than 500 commits, written largely with Claude Code, driven against a `CLAUDE.md` that carries the project's conventions, the schema's invariants, and the things the agent must not do.
+The client system has more than 500 commits, written largely with Claude Code, driven against a `CLAUDE.md` that carries the project's conventions, the schema's invariants, and the things the agent must not do.
 
 I want to be precise about what that does and does not mean, because "I use AI to code" is a claim every candidate makes and every reader discounts.
 
